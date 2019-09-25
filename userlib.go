@@ -52,15 +52,21 @@ func DebugMsg(format string, args ...interface{}) {
     }
 }
 
+
+
 // RandomBytes. Helper function: Returns a byte slice of the specificed
 // size filled with random data
-func RandomBytes(bytes int) (data []byte) {
+func randomBytes(bytes int) (data []byte) {
     data = make([]byte, bytes)
     if _, err := io.ReadFull(rand.Reader, data); err != nil {
         panic(err)
     }
     return
 }
+
+// Can replace this function for development/testing
+var RandomBytes = randomBytes
+
 
 type PublicKeyType struct {
     KeyType string
@@ -86,15 +92,17 @@ var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
 */
 
 // Sets the value in the datastore
-func DatastoreSet(key UUID, value []byte) {
+func datastoreSet(key UUID, value []byte) {
     foo := make([]byte, len(value))
     copy(foo, value)
 
     datastore[key] = foo
 }
 
+var DatastoreSet = datastoreSet
+
 // Returns the value if it exists
-func DatastoreGet(key UUID) (value []byte, ok bool) {
+func datastoreGet(key UUID) (value []byte, ok bool) {
     value, ok = datastore[key]
     if ok && value != nil {
         foo := make([]byte, len(value))
@@ -104,23 +112,30 @@ func DatastoreGet(key UUID) (value []byte, ok bool) {
     return
 }
 
+var DatastoreGet = datastoreGet
+
+
 // Deletes a key
-func DatastoreDelete(key UUID) {
+func datastoreDelete(key UUID) {
     delete(datastore, key)
 }
 
+var DatastoreDelete = datastoreDelete
+
 // Use this in testing to reset the datastore to empty
-func DatastoreClear() {
+func datastoreClear() {
     datastore = make(map[UUID][]byte)
 }
+var DatastoreClear = datastoreClear
 
 // Use this in testing to reset the keystore to empty
-func KeystoreClear() {
+func keystoreClear() {
     keystore = make(map[string]PublicKeyType)
 }
+var KeystoreClear = keystoreClear
 
 // Sets the value in the keystore
-func KeystoreSet(key string, value PublicKeyType) error {
+func keystoreSet(key string, value PublicKeyType) error {
     _, present := keystore[key]
     if present != false {
        return errors.New("That entry in the Keystore has been taken.")
@@ -129,12 +144,16 @@ func KeystoreSet(key string, value PublicKeyType) error {
     keystore[key] = value
     return nil
 }
+var KeystoreSet = keystoreSet
+
 
 // Returns the value if it exists
-func KeystoreGet(key string) (value PublicKeyType, ok bool) {
+func keystoreGet(key string) (value PublicKeyType, ok bool) {
     value, ok = keystore[key]
     return
 }
+var KeystoreGet = keystoreGet
+
 
 // Use this in testing to get the underlying map if you want
 // to play with the datastore.
@@ -169,7 +188,7 @@ type DSSignKey = PrivateKeyType
 type DSVerifyKey = PublicKeyType
 
 // Generates a key pair for public-key encryption via RSA
-func PKEKeyGen() (PKEEncKey, PKEDecKey, error) {
+func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
     RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
     RSAPubKey := RSAPrivKey.PublicKey
 
@@ -183,9 +202,10 @@ func PKEKeyGen() (PKEEncKey, PKEDecKey, error) {
 
     return PKEEncKeyRes, PKEDecKeyRes, err
 }
+var PKEKeyGen = pkeKeyGen
 
 // Encrypts a byte stream via RSA-OAEP with sha512 as hash
-func PKEEnc(ek PKEEncKey, plaintext []byte) ([]byte, error) {
+func pkeEnc(ek PKEEncKey, plaintext []byte) ([]byte, error) {
     RSAPubKey := &ek.PubKey
 
     if ek.KeyType != "PKE" {
@@ -196,9 +216,10 @@ func PKEEnc(ek PKEEncKey, plaintext []byte) ([]byte, error) {
 
     return ciphertext, err
 }
+var PKEEnc = pkeEnc
 
 // Decrypts a byte stream encrypted with RSA-OAEP/sha512
-func PKEDec(dk PKEDecKey, ciphertext []byte) ([]byte, error) {
+func pkeDec(dk PKEDecKey, ciphertext []byte) ([]byte, error) {
     RSAPrivKey := &dk.PrivKey
 
     if dk.KeyType != "PKE" {
@@ -209,6 +230,8 @@ func PKEDec(dk PKEDecKey, ciphertext []byte) ([]byte, error) {
 
     return decryption, err
 }
+var PKEDec = pkeDec
+
 
 
 /*
