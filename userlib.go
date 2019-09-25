@@ -242,7 +242,7 @@ var PKEDec = pkeDec
 */
 
 // Generates a key pair for digital signature via RSA
-func DSKeyGen() (DSSignKey, DSVerifyKey, error) {
+func dsKeyGen() (DSSignKey, DSVerifyKey, error) {
     RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
     RSAPubKey := RSAPrivKey.PublicKey
 
@@ -257,8 +257,10 @@ func DSKeyGen() (DSSignKey, DSVerifyKey, error) {
     return DSSignKeyRes, DSVerifyKeyRes, err
 }
 
+var DSKeyGen = dsKeyGen
+
 // Signs a byte stream via SHA256 and PKCS1v15
-func DSSign(sk DSSignKey, msg []byte) ([]byte, error) {
+func dsSign(sk DSSignKey, msg []byte) ([]byte, error) {
     RSAPrivKey := &sk.PrivKey
 
     if sk.KeyType != "DS" {
@@ -272,8 +274,11 @@ func DSSign(sk DSSignKey, msg []byte) ([]byte, error) {
     return sig, err
 }
 
+var DSSign = dsSign
+
+
 // Verifies a signature signed with SHA256 and PKCS1v15
-func DSVerify(vk DSVerifyKey, msg []byte, sig []byte) error {
+func dsVerify(vk DSVerifyKey, msg []byte, sig []byte) error {
     RSAPubKey := &vk.PubKey
 
     if vk.KeyType != "DS" {
@@ -286,6 +291,7 @@ func DSVerify(vk DSVerifyKey, msg []byte, sig []byte) error {
 
     return err
 }
+var DSVerify = dsVerify
 
 
 /*
@@ -296,7 +302,7 @@ func DSVerify(vk DSVerifyKey, msg []byte, sig []byte) error {
 */
 
 // Evaluate the HMAC using sha512
-func HMACEval(key []byte, msg []byte) ([]byte, error) {
+func hmacEval(key []byte, msg []byte) ([]byte, error) {
     if len(key) != 16 && len(key) != 24 && len(key) != 32 {
        panic(errors.New("The input as key for HMAC should be a 16-byte key."))
     }
@@ -304,15 +310,19 @@ func HMACEval(key []byte, msg []byte) ([]byte, error) {
     mac := hmac.New(sha512.New, key)
     mac.Write(msg)
     res := mac.Sum(nil)
-
     return res, nil
 }
 
+var HMACEval = hmacEval
+
+
 // Equals comparison for hashes/MACs
 // Does NOT leak timing.
-func HMACEqual(a []byte, b []byte) bool {
+func hmacEqual(a []byte, b []byte) bool {
     return hmac.Equal(a, b)
 }
+
+var HMACEqual = hmacEqual
 
 
 /*
@@ -324,10 +334,11 @@ func HMACEqual(a []byte, b []byte) bool {
 
 // Argon2:  Automatically choses a decent combination of iterations and memory
 // Use this to generate a key from a password
-func Argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
+func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
     return argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
 }
 
+var Argon2Key = argon2Key
 
 /*
 ********************************************
@@ -338,7 +349,7 @@ func Argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
 
 // Encrypts a byte slice with AES-CTR
 // Length of iv should be == AESBlockSize
-func SymEnc(key []byte, iv []byte, plaintext []byte) []byte {
+func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
     if len(iv) != AESBlockSize {
         panic("IV length not equal to AESBlockSize")
     }
@@ -356,9 +367,10 @@ func SymEnc(key []byte, iv []byte, plaintext []byte) []byte {
 
     return ciphertext
 }
+var SymEnc = symEnc
 
 // Decrypts a ciphertext encrypted with AES-CTR
-func SymDec(key []byte, ciphertext []byte) []byte {
+func symDec(key []byte, ciphertext []byte) []byte {
     block, err := aes.NewCipher(key)
     if err != nil {
         panic(err)
@@ -372,3 +384,6 @@ func SymDec(key []byte, ciphertext []byte) []byte {
 
     return plaintext
 }
+
+var SymDec = symDec
+
