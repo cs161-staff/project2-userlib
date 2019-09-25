@@ -219,16 +219,33 @@ func TestArgon2(t *testing.T) {
 }
 
 func TestStreamCipher(t *testing.T) {
-    iv := RandomBytes(16)
-    t.Log("Random IV", iv)
+	iv := RandomBytes(16)
+	t.Log("Random IV", iv)
 
-    ciphertext := SymEnc(key1, iv, []byte("foo"))
-    decryption := SymDec(key1, ciphertext)
+	t.Log("Also testing replacing SymDec with wrapper")
+	wrapped := false
 
-    t.Log("Decrypted messagege:", string(decryption))
-    if string(decryption) != "foo" {
-        t.Error("Symmetric decryption failure")
-    }
+	// Save the OLD version of SymDec
+	decryptInternal := SymDec
+	
+	SymDec = func(key []byte, ciphertext []byte) []byte {
+		wrapped = true
+		t.Log("Wrapped decryption called")
+		return decryptInternal(key, ciphertext)
+	}
+
+	t.Log("Encrypting")
+	ciphertext := SymEnc(key1, iv, []byte("foo"))
+	t.Log("Decrypting")
+	decryption := SymDec(key1, ciphertext)
+	
+	t.Log("Decrypted messagege:", string(decryption))
+	if string(decryption) != "foo" {
+		t.Error("Symmetric decryption failure")
+	}
+	if !wrapped {
+		t.Error("Falied to properly wrap decryption")
+	}
 }
 
 // Deliberate fail example
