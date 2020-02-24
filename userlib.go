@@ -315,8 +315,8 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 
 var HMACEval = hmacEval
 
-func hashKDF(key []byte) ([]byte, error) {
-    return HMACEval(key, "deterministic string")
+func hashKDF(key []byte, purpose []byte) ([]byte, error) {
+    return HMACEval(key, purpose)
 }
 
 var HashKDF = hashKDF
