@@ -315,6 +315,11 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 
 var HMACEval = hmacEval
 
+func hashKDF(key []byte) ([]byte, error) {
+    return HMACEval(key, "deterministic string")
+}
+
+var HashKDF = hashKDF
 
 // Equals comparison for hashes/MACs
 // Does NOT leak timing.
