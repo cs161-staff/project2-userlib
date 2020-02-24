@@ -315,11 +315,14 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 
 var HMACEval = hmacEval
 
+<<<<<<< HEAD
 func hashKDF(key []byte, purpose []byte) ([]byte, error) {
     return HMACEval(key, purpose)
 }
 
 var HashKDF = hashKDF
+=======
+>>>>>>> parent of fc2bec6... add HKDF
 
 // Equals comparison for hashes/MACs
 // Does NOT leak timing.
