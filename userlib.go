@@ -315,6 +315,8 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 
 var HMACEval = hmacEval
 
+var HashKDF = hmacEval
+
 // Equals comparison for hashes/MACs
 // Does NOT leak timing.
 func hmacEqual(a []byte, b []byte) bool {
