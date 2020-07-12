@@ -191,8 +191,8 @@ var Argon2Key = argon2Key
 ********************************************
  */
 
-// Argon2:  Automatically choses a decent combination of iterations and memory
-// Use this to generate a key from a password
+// SHA512: Returns the checksum of data. Output is a size 64 array.
+// Use this to hash arbitrary byte slices.
 func hash(data []byte) [sha512.Size]byte {
     return sha512.Sum512(data)
 }
