@@ -266,7 +266,7 @@ func TestHash(t *testing.T) {
     }
     t.Log("Checking against expected hash from https://sha512.online/")
     if !bytes.Equal(hash1[:], expected1) || !bytes.Equal(hash2[:], expected2) || !bytes.Equal(hash3[:], expected3) || !bytes.Equal(hash4[:], expected4) || !bytes.Equal(hash5[:], expected5) {
-        t.Error("yeet")
+        t.Error("Hash does not match up")
     }
 }
 
