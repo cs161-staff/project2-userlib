@@ -1,24 +1,24 @@
 package userlib
 
 import (
+    "errors"
     "fmt"
+    "log"
     "strings"
     "time"
-    "errors"
-    "log"
 
     "io"
 
     "crypto"
-    "crypto/rsa"
-    "crypto/hmac"
-    "crypto/rand"
-    "crypto/sha512"
     "crypto/aes"
     "crypto/cipher"
+    "crypto/hmac"
+    "crypto/rand"
+    "crypto/rsa"
+    "crypto/sha512"
 
-    "golang.org/x/crypto/argon2"
     "github.com/google/uuid"
+    "golang.org/x/crypto/argon2"
 )
 
 type UUID = uuid.UUID
@@ -54,7 +54,7 @@ func DebugMsg(format string, args ...interface{}) {
 
 
 
-// RandomBytes. Helper function: Returns a byte slice of the specificed
+// RandomBytes. Helper function: Returns a byte slice of the specified
 // size filled with random data
 func randomBytes(bytes int) (data []byte) {
     data = make([]byte, bytes)
@@ -167,6 +167,37 @@ func KeystoreGetMap() map[string]PublicKeyType {
     return keystore
 }
 
+/*
+********************************************
+**               KDF                      **
+**            Argon2Key                   **
+********************************************
+ */
+
+// Argon2:  Automatically chooses a decent combination of iterations and memory
+// Use this to generate a key from a password
+func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
+    return argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
+}
+
+var Argon2Key = argon2Key
+
+
+
+/*
+********************************************
+**               Hash                     **
+**              SHA512                    **
+********************************************
+ */
+
+// Argon2:  Automatically choses a decent combination of iterations and memory
+// Use this to generate a key from a password
+func hash(data []byte) [sha512.Size]byte {
+    return sha512.Sum512(data)
+}
+
+var Hash = hash
 
 /*
 ********************************************
@@ -325,21 +356,6 @@ func hmacEqual(a []byte, b []byte) bool {
 
 var HMACEqual = hmacEqual
 
-
-/*
-********************************************
-**               KDF                      **
-**            Argon2Key                   **
-********************************************
-*/
-
-// Argon2:  Automatically choses a decent combination of iterations and memory
-// Use this to generate a key from a password
-func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
-    return argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
-}
-
-var Argon2Key = argon2Key
 
 /*
 ********************************************
