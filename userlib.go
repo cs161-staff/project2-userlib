@@ -409,7 +409,7 @@ func symDec(key []byte, ciphertext []byte) []byte {
     mode := cipher.NewCBCDecrypter(block, iv)
 
     // usage adapted from this page https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
-  	mode.CryptBlocks(plaintext, ciphertext)
+  	mode.CryptBlocks(plaintext, ciphertext[AESBlockSize:])
 
     return plaintext
 }
