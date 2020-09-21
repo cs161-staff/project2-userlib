@@ -161,7 +161,7 @@ func DatastoreGetMap() map[UUID][]byte {
     return datastore
 }
 
-// Use this in testing to get the underlying map if you want 
+// Use this in testing to get the underlying map if you want
 // to play with the keystore.
 func KeystoreGetMap() map[string]PublicKeyType {
     return keystore
@@ -364,8 +364,9 @@ var HMACEqual = hmacEqual
 ********************************************
 */
 
-// Encrypts a byte slice with AES-CTR
+// Encrypts a byte slice with AES-CBC
 // Length of iv should be == AESBlockSize
+// Length of plaintext should be divisible by AESBblockSize
 func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
     if len(iv) != AESBlockSize {
         panic("IV length not equal to AESBlockSize")
@@ -376,11 +377,16 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
         panic(err)
     }
 
-    stream := cipher.NewCTR(block, iv)
-    ciphertext := make([]byte, AESBlockSize + len(plaintext))
-    copy(ciphertext[:AESBlockSize], iv)
+    if len(plaintext)%aes.BlockSize != 0 {
+        panic("plaintext is not a multiple of the block size")
+    }
 
-    stream.XORKeyStream(ciphertext[AESBlockSize:], plaintext)
+    ciphertext := make([]byte, AESBlockSize + len(plaintext))
+
+    mode := cipher.NewCBCEncrypter(block, iv)
+    mode.CryptBlocks(ciphertext[aes.BlockSize:], plaintext)
+    copy(ciphertext[:AESBlockSize], iv)
+    // example taken here https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
 
     return ciphertext
 }
@@ -395,12 +401,17 @@ func symDec(key []byte, ciphertext []byte) []byte {
 
     iv := ciphertext[:AESBlockSize]
     plaintext := make([]byte, len(ciphertext) - AESBlockSize)
-    stream := cipher.NewCTR(block, iv)
 
-    stream.XORKeyStream(plaintext, ciphertext[aes.BlockSize:])
+    if len(plaintext)%aes.BlockSize != 0 {
+        panic("ciphertext is not a multiple of the block size")
+    }
+
+    mode := cipher.NewCBCDecrypter(block, iv)
+
+    // usage adapted from this page https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
+  	mode.CryptBlocks(plaintext, ciphertext)
 
     return plaintext
 }
 
 var SymDec = symDec
-
