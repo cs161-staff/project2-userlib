@@ -23,15 +23,17 @@ import (
 
 type UUID = uuid.UUID
 
-// RSA key size
-var RSAKeySize = 2048
+// RSA key size (in bytes)
+const RSAKeySizeBytes = 2048
 
-// AES block size and key size
-var AESBlockSize = aes.BlockSize
-var AESKeySize = 16
+// AES block size (in bytes)
+const AESBlockSizeBytes = aes.BlockSize
 
-// Hash and MAC size
-var HashSize = sha512.Size
+// AES key size (in bytes)
+const AESKeySizeBytes = 16
+
+// Output size (in bytes) of Hash and MAC
+const HashSizeBytes = sha512.Size
 
 // Debug print true/false
 var DebugPrint = false
@@ -187,7 +189,7 @@ var Argon2Key = argon2Key
 
 // SHA512: Returns the checksum of data. Output is a size 64 array.
 // Use this to hash arbitrary byte slices.
-func hash(data []byte) [sha512.Size]byte {
+func hash(data []byte) [HashSizeBytes]byte {
 	return sha512.Sum512(data)
 }
 
@@ -214,7 +216,7 @@ type DSVerifyKey = PublicKeyType
 
 // Generates a key pair for public-key encryption via RSA
 func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
-	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
+	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySizeBytes)
 	RSAPubKey := RSAPrivKey.PublicKey
 
 	var PKEEncKeyRes PKEEncKey
@@ -269,7 +271,7 @@ var PKEDec = pkeDec
 
 // Generates a key pair for digital signature via RSA
 func dsKeyGen() (DSSignKey, DSVerifyKey, error) {
-	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
+	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySizeBytes)
 	RSAPubKey := RSAPrivKey.PublicKey
 
 	var DSSignKeyRes DSSignKey
@@ -358,11 +360,11 @@ var HMACEqual = hmacEqual
  */
 
 // Encrypts a byte slice with AES-CBC
-// Length of iv should be == AESBlockSize
-// Length of plaintext should be divisible by AESBblockSize
+// Length of iv should be == AESBlockSizeBytes
+// Length of plaintext should be divisible by AESBlockSize
 func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
-	if len(iv) != AESBlockSize {
-		panic("IV length not equal to AESBlockSize")
+	if len(iv) != AESBlockSizeBytes {
+		panic("IV length not equal to AESBlockSizeBytes")
 	}
 
 	block, err := aes.NewCipher(key)
@@ -370,15 +372,15 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 		panic(err)
 	}
 
-	if len(plaintext)%aes.BlockSize != 0 {
+	if len(plaintext)%AESBlockSizeBytes != 0 {
 		panic("plaintext is not a multiple of the block size")
 	}
 
-	ciphertext := make([]byte, AESBlockSize+len(plaintext))
+	ciphertext := make([]byte, AESBlockSizeBytes+len(plaintext))
 
 	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(ciphertext[aes.BlockSize:], plaintext)
-	copy(ciphertext[:AESBlockSize], iv)
+	mode.CryptBlocks(ciphertext[AESBlockSizeBytes:], plaintext)
+	copy(ciphertext[:AESBlockSizeBytes], iv)
 	// example taken here https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
 
 	return ciphertext
@@ -393,17 +395,17 @@ func symDec(key []byte, ciphertext []byte) []byte {
 		panic(err)
 	}
 
-	iv := ciphertext[:AESBlockSize]
-	plaintext := make([]byte, len(ciphertext)-AESBlockSize)
+	iv := ciphertext[:AESBlockSizeBytes]
+	plaintext := make([]byte, len(ciphertext)-AESBlockSizeBytes)
 
-	if len(plaintext)%aes.BlockSize != 0 {
+	if len(plaintext)%AESBlockSizeBytes != 0 {
 		panic("ciphertext is not a multiple of the block size")
 	}
 
 	mode := cipher.NewCBCDecrypter(block, iv)
 
 	// usage adapted from this page https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
-	mode.CryptBlocks(plaintext, ciphertext[AESBlockSize:])
+	mode.CryptBlocks(plaintext, ciphertext[AESBlockSizeBytes:])
 
 	return plaintext
 }
