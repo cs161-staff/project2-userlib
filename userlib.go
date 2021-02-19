@@ -1,24 +1,24 @@
 package userlib
 
 import (
-    "errors"
-    "fmt"
-    "log"
-    "strings"
-    "time"
+	"errors"
+	"fmt"
+	"log"
+	"strings"
+	"time"
 
-    "io"
+	"io"
 
-    "crypto"
-    "crypto/aes"
-    "crypto/cipher"
-    "crypto/hmac"
-    "crypto/rand"
-    "crypto/rsa"
-    "crypto/sha512"
+	"crypto"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha512"
 
-    "github.com/google/uuid"
-    "golang.org/x/crypto/argon2"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/argon2"
 )
 
 type UUID = uuid.UUID
@@ -33,7 +33,6 @@ var AESKeySize = 16
 // Hash and MAC size
 var HashSize = sha512.Size
 
-
 // Debug print true/false
 var DebugPrint = false
 
@@ -41,47 +40,43 @@ var DebugPrint = false
 // the DebugPrint global is set.  All our testing ignores stderr,
 // so feel free to use this for any sort of testing you want.
 
-func SetDebugStatus(status bool){
+func SetDebugStatus(status bool) {
 	DebugPrint = status
 }
 
 func DebugMsg(format string, args ...interface{}) {
-    if DebugPrint {
-        msg := fmt.Sprintf("%v ", time.Now().Format("15:04:05.00000"))
-        log.Printf(msg+strings.Trim(format, "\r\n ")+"\n", args...)
-    }
+	if DebugPrint {
+		msg := fmt.Sprintf("%v ", time.Now().Format("15:04:05.00000"))
+		log.Printf(msg+strings.Trim(format, "\r\n ")+"\n", args...)
+	}
 }
-
-
 
 // RandomBytes. Helper function: Returns a byte slice of the specified
 // size filled with random data
 func randomBytes(bytes int) (data []byte) {
-    data = make([]byte, bytes)
-    if _, err := io.ReadFull(rand.Reader, data); err != nil {
-        panic(err)
-    }
-    return
+	data = make([]byte, bytes)
+	if _, err := io.ReadFull(rand.Reader, data); err != nil {
+		panic(err)
+	}
+	return
 }
 
 // Can replace this function for development/testing
 var RandomBytes = randomBytes
 
-
 type PublicKeyType struct {
-    KeyType string
-    PubKey rsa.PublicKey
+	KeyType string
+	PubKey  rsa.PublicKey
 }
 
 type PrivateKeyType struct {
-    KeyType string
-    PrivKey rsa.PrivateKey
+	KeyType string
+	PrivKey rsa.PrivateKey
 }
 
 // Datastore and Keystore variables
 var datastore map[UUID][]byte = make(map[UUID][]byte)
 var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
-
 
 /*
 ********************************************
@@ -89,82 +84,83 @@ var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
 **       DatastoreSet, DatastoreGet,      **
 **     DatastoreDelete, DatastoreClear    **
 ********************************************
-*/
+ */
 
 // Sets the value in the datastore
 func datastoreSet(key UUID, value []byte) {
-    foo := make([]byte, len(value))
-    copy(foo, value)
+	foo := make([]byte, len(value))
+	copy(foo, value)
 
-    datastore[key] = foo
+	datastore[key] = foo
 }
 
 var DatastoreSet = datastoreSet
 
 // Returns the value if it exists
 func datastoreGet(key UUID) (value []byte, ok bool) {
-    value, ok = datastore[key]
-    if ok && value != nil {
-        foo := make([]byte, len(value))
-        copy(foo, value)
-        return foo, ok
-    }
-    return
+	value, ok = datastore[key]
+	if ok && value != nil {
+		foo := make([]byte, len(value))
+		copy(foo, value)
+		return foo, ok
+	}
+	return
 }
 
 var DatastoreGet = datastoreGet
 
-
 // Deletes a key
 func datastoreDelete(key UUID) {
-    delete(datastore, key)
+	delete(datastore, key)
 }
 
 var DatastoreDelete = datastoreDelete
 
 // Use this in testing to reset the datastore to empty
 func datastoreClear() {
-    datastore = make(map[UUID][]byte)
+	datastore = make(map[UUID][]byte)
 }
+
 var DatastoreClear = datastoreClear
 
 // Use this in testing to reset the keystore to empty
 func keystoreClear() {
-    keystore = make(map[string]PublicKeyType)
+	keystore = make(map[string]PublicKeyType)
 }
+
 var KeystoreClear = keystoreClear
 
 // Sets the value in the keystore
 func keystoreSet(key string, value PublicKeyType) error {
-    _, present := keystore[key]
-    if present != false {
-       return errors.New("That entry in the Keystore has been taken.")
-    }
+	_, present := keystore[key]
+	if present != false {
+		return errors.New("That entry in the Keystore has been taken.")
+	}
 
-    keystore[key] = value
-    return nil
+	keystore[key] = value
+	return nil
 }
-var KeystoreSet = keystoreSet
 
+var KeystoreSet = keystoreSet
 
 // Returns the value if it exists
 func keystoreGet(key string) (value PublicKeyType, ok bool) {
-    value, ok = keystore[key]
-    return
+	value, ok = keystore[key]
+	return
 }
-var KeystoreGet = keystoreGet
 
+var KeystoreGet = keystoreGet
 
 // Use this in testing to get the underlying map if you want
 // to play with the datastore.
 func DatastoreGetMap() map[UUID][]byte {
-    return datastore
+	return datastore
 }
 
 // Use this in testing to get the underlying map if you want
 // to play with the keystore.
 func KeystoreGetMap() map[string]PublicKeyType {
-    return keystore
+	return keystore
 }
 
 /*
@@ -177,12 +173,10 @@ func KeystoreGetMap() map[string]PublicKeyType {
 // Argon2:  Automatically chooses a decent combination of iterations and memory
 // Use this to generate a key from a password
 func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
-    return argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
+	return argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
 }
 
 var Argon2Key = argon2Key
-
-
 
 /*
 ********************************************
@@ -194,7 +188,7 @@ var Argon2Key = argon2Key
 // SHA512: Returns the checksum of data. Output is a size 64 array.
 // Use this to hash arbitrary byte slices.
 func hash(data []byte) [sha512.Size]byte {
-    return sha512.Sum512(data)
+	return sha512.Sum512(data)
 }
 
 var Hash = hash
@@ -204,7 +198,7 @@ var Hash = hash
 **         Public Key Encryption          **
 **       PKEKeyGen, PKEEnc, PKEDec        **
 ********************************************
-*/
+ */
 
 // Four structs to help you manage your different keys
 // You should only have 1 of each struct
@@ -220,128 +214,128 @@ type DSVerifyKey = PublicKeyType
 
 // Generates a key pair for public-key encryption via RSA
 func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
-    RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
-    RSAPubKey := RSAPrivKey.PublicKey
+	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
+	RSAPubKey := RSAPrivKey.PublicKey
 
-    var PKEEncKeyRes PKEEncKey
-    PKEEncKeyRes.KeyType = "PKE"
-    PKEEncKeyRes.PubKey = RSAPubKey
+	var PKEEncKeyRes PKEEncKey
+	PKEEncKeyRes.KeyType = "PKE"
+	PKEEncKeyRes.PubKey = RSAPubKey
 
-    var PKEDecKeyRes PKEDecKey
-    PKEDecKeyRes.KeyType = "PKE"
-    PKEDecKeyRes.PrivKey = *RSAPrivKey
+	var PKEDecKeyRes PKEDecKey
+	PKEDecKeyRes.KeyType = "PKE"
+	PKEDecKeyRes.PrivKey = *RSAPrivKey
 
-    return PKEEncKeyRes, PKEDecKeyRes, err
+	return PKEEncKeyRes, PKEDecKeyRes, err
 }
+
 var PKEKeyGen = pkeKeyGen
 
 // Encrypts a byte stream via RSA-OAEP with sha512 as hash
 func pkeEnc(ek PKEEncKey, plaintext []byte) ([]byte, error) {
-    RSAPubKey := &ek.PubKey
+	RSAPubKey := &ek.PubKey
 
-    if ek.KeyType != "PKE" {
-        return nil, errors.New("Using a non-PKE key for PKE.")
-    }
+	if ek.KeyType != "PKE" {
+		return nil, errors.New("Using a non-PKE key for PKE.")
+	}
 
-    ciphertext, err := rsa.EncryptOAEP(sha512.New(), rand.Reader, RSAPubKey, plaintext, nil)
+	ciphertext, err := rsa.EncryptOAEP(sha512.New(), rand.Reader, RSAPubKey, plaintext, nil)
 
-    return ciphertext, err
+	return ciphertext, err
 }
+
 var PKEEnc = pkeEnc
 
 // Decrypts a byte stream encrypted with RSA-OAEP/sha512
 func pkeDec(dk PKEDecKey, ciphertext []byte) ([]byte, error) {
-    RSAPrivKey := &dk.PrivKey
+	RSAPrivKey := &dk.PrivKey
 
-    if dk.KeyType != "PKE" {
-        return nil, errors.New("Using a non-PKE key for PKE.")
-    }
+	if dk.KeyType != "PKE" {
+		return nil, errors.New("Using a non-PKE key for PKE.")
+	}
 
-    decryption, err := rsa.DecryptOAEP(sha512.New(), rand.Reader, RSAPrivKey, ciphertext, nil)
+	decryption, err := rsa.DecryptOAEP(sha512.New(), rand.Reader, RSAPrivKey, ciphertext, nil)
 
-    return decryption, err
+	return decryption, err
 }
+
 var PKEDec = pkeDec
-
-
 
 /*
 ********************************************
 **           Digital Signature            **
 **       DSKeyGen, DSSign, DSVerify       **
 ********************************************
-*/
+ */
 
 // Generates a key pair for digital signature via RSA
 func dsKeyGen() (DSSignKey, DSVerifyKey, error) {
-    RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
-    RSAPubKey := RSAPrivKey.PublicKey
+	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
+	RSAPubKey := RSAPrivKey.PublicKey
 
-    var DSSignKeyRes DSSignKey
-    DSSignKeyRes.KeyType = "DS"
-    DSSignKeyRes.PrivKey = *RSAPrivKey
+	var DSSignKeyRes DSSignKey
+	DSSignKeyRes.KeyType = "DS"
+	DSSignKeyRes.PrivKey = *RSAPrivKey
 
-    var DSVerifyKeyRes DSVerifyKey
-    DSVerifyKeyRes.KeyType = "DS"
-    DSVerifyKeyRes.PubKey = RSAPubKey
+	var DSVerifyKeyRes DSVerifyKey
+	DSVerifyKeyRes.KeyType = "DS"
+	DSVerifyKeyRes.PubKey = RSAPubKey
 
-    return DSSignKeyRes, DSVerifyKeyRes, err
+	return DSSignKeyRes, DSVerifyKeyRes, err
 }
 
 var DSKeyGen = dsKeyGen
 
 // Signs a byte stream via SHA256 and PKCS1v15
 func dsSign(sk DSSignKey, msg []byte) ([]byte, error) {
-    RSAPrivKey := &sk.PrivKey
+	RSAPrivKey := &sk.PrivKey
 
-    if sk.KeyType != "DS" {
-        return nil, errors.New("Using a non-DS key for DS.")
-    }
+	if sk.KeyType != "DS" {
+		return nil, errors.New("Using a non-DS key for DS.")
+	}
 
-    hashed := sha512.Sum512(msg)
+	hashed := sha512.Sum512(msg)
 
-    sig, err := rsa.SignPKCS1v15(rand.Reader, RSAPrivKey, crypto.SHA512, hashed[:])
+	sig, err := rsa.SignPKCS1v15(rand.Reader, RSAPrivKey, crypto.SHA512, hashed[:])
 
-    return sig, err
+	return sig, err
 }
 
 var DSSign = dsSign
 
-
 // Verifies a signature signed with SHA256 and PKCS1v15
 func dsVerify(vk DSVerifyKey, msg []byte, sig []byte) error {
-    RSAPubKey := &vk.PubKey
+	RSAPubKey := &vk.PubKey
 
-    if vk.KeyType != "DS" {
-        return errors.New("Using a non-DS key for DS.")
-    }
+	if vk.KeyType != "DS" {
+		return errors.New("Using a non-DS key for DS.")
+	}
 
-    hashed := sha512.Sum512(msg)
+	hashed := sha512.Sum512(msg)
 
-    err := rsa.VerifyPKCS1v15(RSAPubKey, crypto.SHA512, hashed[:], sig)
+	err := rsa.VerifyPKCS1v15(RSAPubKey, crypto.SHA512, hashed[:], sig)
 
-    return err
+	return err
 }
-var DSVerify = dsVerify
 
+var DSVerify = dsVerify
 
 /*
 ********************************************
 **                HMAC                    **
 **         HMACEval, HMACEqual            **
 ********************************************
-*/
+ */
 
 // Evaluate the HMAC using sha512
 func hmacEval(key []byte, msg []byte) ([]byte, error) {
-    if len(key) != 16 && len(key) != 24 && len(key) != 32 {
-       panic(errors.New("The input as key for HMAC should be a 16-byte key."))
-    }
+	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
+		panic(errors.New("The input as key for HMAC should be a 16-byte key."))
+	}
 
-    mac := hmac.New(sha512.New, key)
-    mac.Write(msg)
-    res := mac.Sum(nil)
-    return res, nil
+	mac := hmac.New(sha512.New, key)
+	mac.Write(msg)
+	res := mac.Sum(nil)
+	return res, nil
 }
 
 var HMACEval = hmacEval
@@ -351,67 +345,67 @@ var HashKDF = hmacEval
 // Equals comparison for hashes/MACs
 // Does NOT leak timing.
 func hmacEqual(a []byte, b []byte) bool {
-    return hmac.Equal(a, b)
+	return hmac.Equal(a, b)
 }
 
 var HMACEqual = hmacEqual
-
 
 /*
 ********************************************
 **        Symmetric Encryption            **
 **           SymEnc, SymDec               **
 ********************************************
-*/
+ */
 
 // Encrypts a byte slice with AES-CBC
 // Length of iv should be == AESBlockSize
 // Length of plaintext should be divisible by AESBblockSize
 func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
-    if len(iv) != AESBlockSize {
-        panic("IV length not equal to AESBlockSize")
-    }
+	if len(iv) != AESBlockSize {
+		panic("IV length not equal to AESBlockSize")
+	}
 
-    block, err := aes.NewCipher(key)
-    if err != nil {
-        panic(err)
-    }
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		panic(err)
+	}
 
-    if len(plaintext)%aes.BlockSize != 0 {
-        panic("plaintext is not a multiple of the block size")
-    }
+	if len(plaintext)%aes.BlockSize != 0 {
+		panic("plaintext is not a multiple of the block size")
+	}
 
-    ciphertext := make([]byte, AESBlockSize + len(plaintext))
+	ciphertext := make([]byte, AESBlockSize+len(plaintext))
 
-    mode := cipher.NewCBCEncrypter(block, iv)
-    mode.CryptBlocks(ciphertext[aes.BlockSize:], plaintext)
-    copy(ciphertext[:AESBlockSize], iv)
-    // example taken here https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
+	mode := cipher.NewCBCEncrypter(block, iv)
+	mode.CryptBlocks(ciphertext[aes.BlockSize:], plaintext)
+	copy(ciphertext[:AESBlockSize], iv)
+	// example taken here https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
 
-    return ciphertext
+	return ciphertext
 }
+
 var SymEnc = symEnc
 
 // Decrypts a ciphertext encrypted with AES-CTR
 func symDec(key []byte, ciphertext []byte) []byte {
-    block, err := aes.NewCipher(key)
-    if err != nil {
-        panic(err)
-    }
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		panic(err)
+	}
 
-    iv := ciphertext[:AESBlockSize]
-    plaintext := make([]byte, len(ciphertext) - AESBlockSize)
+	iv := ciphertext[:AESBlockSize]
+	plaintext := make([]byte, len(ciphertext)-AESBlockSize)
 
-    if len(plaintext)%aes.BlockSize != 0 {
-        panic("ciphertext is not a multiple of the block size")
-    }
+	if len(plaintext)%aes.BlockSize != 0 {
+		panic("ciphertext is not a multiple of the block size")
+	}
 
-    mode := cipher.NewCBCDecrypter(block, iv)
+	mode := cipher.NewCBCDecrypter(block, iv)
 
-    // usage adapted from this page https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
-  	mode.CryptBlocks(plaintext, ciphertext[AESBlockSize:])
+	// usage adapted from this page https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
+	mode.CryptBlocks(plaintext, ciphertext[AESBlockSize:])
 
-    return plaintext
+	return plaintext
 }
 
 var SymDec = symDec
