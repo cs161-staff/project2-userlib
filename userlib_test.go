@@ -1,9 +1,14 @@
 package userlib
 
-import "testing"
-import "bytes"
-import "encoding/hex"
-import "github.com/google/uuid"
+import (
+	"bytes"
+	"encoding/hex"
+	"strings"
+	"testing"
+
+	"github.com/cs161-staff/userlib"
+	"github.com/google/uuid"
+)
 
 // Golang has a very powerful routine for building tests.
 
@@ -219,8 +224,9 @@ func TestArgon2(t *testing.T) {
 }
 
 func TestStreamCipher(t *testing.T) {
+	someBlockSizeMsg := strings.Repeat("A", userlib.AESBlockSizeBytes)
 	iv := RandomBytes(16)
-	t.Log("Random IV", iv)
+	t.Log("Random IV:", iv)
 
 	t.Log("Also testing replacing SymDec with wrapper")
 	wrapped := false
@@ -234,13 +240,14 @@ func TestStreamCipher(t *testing.T) {
 		return decryptInternal(key, ciphertext)
 	}
 
-	t.Log("Encrypting")
-	ciphertext := SymEnc(key1, iv, []byte("foo"))
-	t.Log("Decrypting")
+	t.Log("Before SymEnc()")
+	ciphertext := SymEnc(key1, iv, []byte(someBlockSizeMsg))
+
+	t.Log("Before SymDec()")
 	decryption := SymDec(key1, ciphertext)
 
 	t.Log("Decrypted message:", string(decryption))
-	if string(decryption) != "foo" {
+	if string(decryption) != someBlockSizeMsg {
 		t.Error("Symmetric decryption failure")
 	}
 	if !wrapped {
