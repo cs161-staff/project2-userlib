@@ -366,7 +366,7 @@ var HMACEqual = hmacEqual
 
 // Encrypts a byte slice with AES-CBC
 // Length of iv should be == AESBlockSize
-// Length of plaintext should be divisible by AESBblockSize
+// Length of plaintext should be divisible by AESBlockSize
 func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
     if len(iv) != AESBlockSize {
         panic("IV length not equal to AESBlockSize")
