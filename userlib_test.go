@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cs161-staff/userlib"
 	"github.com/google/uuid"
 )
 
@@ -224,7 +223,7 @@ func TestArgon2(t *testing.T) {
 }
 
 func TestStreamCipher(t *testing.T) {
-	someBlockSizeMsg := strings.Repeat("A", userlib.AESBlockSizeBytes)
+	someBlockSizeMsg := strings.Repeat("A", AESBlockSizeBytes)
 	iv := RandomBytes(16)
 	t.Log("Random IV:", iv)
 
