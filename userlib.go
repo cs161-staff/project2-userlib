@@ -23,7 +23,7 @@ import (
 
 type UUID = uuid.UUID
 
-// RSA key size (in bytes)
+// RSA key size (in bits)
 const RSAKeySizeBytes = 2048
 
 // AES block size (in bytes)
