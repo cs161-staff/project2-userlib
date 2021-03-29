@@ -190,7 +190,8 @@ var Argon2Key = argon2Key
 // SHA512: Returns the checksum of data. Output is a size 64 array.
 // Use this to hash arbitrary byte slices.
 func hash(data []byte) [HashSizeBytes]byte {
-	return sha512.Sum512(data)
+	hashVal := sha512.Sum512(data)
+	return hashVal[:]
 }
 
 var Hash = hash
