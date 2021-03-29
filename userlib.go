@@ -76,6 +76,19 @@ type PrivateKeyType struct {
 	PrivKey rsa.PrivateKey
 }
 
+// Bandwidth tracker (for measuring efficient append)
+var bandwidth = 0
+
+// Reset bandwidth tracker to 0
+func ClearBandwidth() {
+	bandwidth = 0
+}
+
+// Get number of bytes uploaded/downloaded from Datastore
+func GetBandwidth() int {
+	return bandwidth
+}
+
 // Datastore and Keystore variables
 var datastore map[UUID][]byte = make(map[UUID][]byte)
 var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
@@ -90,6 +103,9 @@ var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
 
 // Sets the value in the datastore
 func datastoreSet(key UUID, value []byte) {
+	// Update bandwidth tracker
+	bandwidth += len(value)
+
 	foo := make([]byte, len(value))
 	copy(foo, value)
 
@@ -102,6 +118,9 @@ var DatastoreSet = datastoreSet
 func datastoreGet(key UUID) (value []byte, ok bool) {
 	value, ok = datastore[key]
 	if ok && value != nil {
+		// Update bandwidth tracker
+		bandwidth += len(value)
+
 		foo := make([]byte, len(value))
 		copy(foo, value)
 		return foo, ok
