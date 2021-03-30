@@ -102,6 +102,20 @@ func TestDatastore(t *testing.T) {
 	t.Log("Datastore map", DatastoreGetMap())
 	DatastoreClear()
 	t.Log("Datastore map", DatastoreGetMap())
+
+	// Test bandwidth tracker
+	DatastoreResetBandwidth()
+	fiveBytes := "ABCDE"
+	DatastoreSet(UUID1, []byte(fiveBytes))
+	bandwidthUsed := DatastoreGetBandwidth()
+	if bandwidthUsed != 5 {
+		t.Error("Incorrect bandwidth calculation after storing 5 bytes.")
+	}
+	DatastoreGet(UUID1)
+	bandwidthUsed = DatastoreGetBandwidth()
+	if bandwidthUsed != 10 {
+		t.Error("Incorrect bandwidth calculation after storing and loading 5 bytes")
+	}
 }
 
 func TestKeystore(t *testing.T) {
