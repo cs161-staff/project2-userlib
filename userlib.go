@@ -77,17 +77,7 @@ type PrivateKeyType struct {
 }
 
 // Bandwidth tracker (for measuring efficient append)
-var bandwidth = 0
-
-// Reset bandwidth tracker to 0
-func ClearBandwidth() {
-	bandwidth = 0
-}
-
-// Get number of bytes uploaded/downloaded from Datastore
-func GetBandwidth() int {
-	return bandwidth
-}
+var datastoreBandwidth = 0
 
 // Datastore and Keystore variables
 var datastore map[UUID][]byte = make(map[UUID][]byte)
@@ -104,7 +94,7 @@ var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
 // Sets the value in the datastore
 func datastoreSet(key UUID, value []byte) {
 	// Update bandwidth tracker
-	bandwidth += len(value)
+	datastoreBandwidth += len(value)
 
 	foo := make([]byte, len(value))
 	copy(foo, value)
@@ -119,7 +109,7 @@ func datastoreGet(key UUID) (value []byte, ok bool) {
 	value, ok = datastore[key]
 	if ok && value != nil {
 		// Update bandwidth tracker
-		bandwidth += len(value)
+		datastoreBandwidth += len(value)
 
 		foo := make([]byte, len(value))
 		copy(foo, value)
@@ -143,6 +133,15 @@ func datastoreClear() {
 }
 
 var DatastoreClear = datastoreClear
+
+func DatastoreResetBandwidth() {
+	datastoreBandwidth = 0
+}
+
+// Get number of bytes uploaded/downloaded to/from Datastore.
+func DatastoreGetBandwidth() int {
+	return datastoreBandwidth
+}
 
 // Use this in testing to reset the keystore to empty
 func keystoreClear() {
