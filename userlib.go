@@ -343,7 +343,7 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 var HMACEval = hmacEval
 
 // HashKDF (uses the same algorithm as hmacEval)
-func HashKDF(key []byte, msg []byte) ([]byte, error) {
+func hashKDF(key []byte, msg []byte) ([]byte, error) {
 	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
 		panic(errors.New("The input as key for HashKDF should be a 16-byte key."))
 	}
@@ -353,6 +353,8 @@ func HashKDF(key []byte, msg []byte) ([]byte, error) {
 	res := mac.Sum(nil)
 	return res, nil
 }
+
+var HashKDF = hashKDF
 
 // Equals comparison for hashes/MACs
 // Does NOT leak timing.
