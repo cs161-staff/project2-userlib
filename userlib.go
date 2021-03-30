@@ -342,7 +342,23 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 
 var HMACEval = hmacEval
 
-// HashKDF (uses the same algorithm as hmacEval)
+// Equals comparison for hashes/MACs
+// Does NOT leak timing.
+func hmacEqual(a []byte, b []byte) bool {
+	return hmac.Equal(a, b)
+}
+
+var HMACEqual = hmacEqual
+
+/*
+********************************************
+**   Hash-Based Key Derivation Function   **
+**                 HashKDF                **
+********************************************
+ */
+
+// HashKDF (uses the same algorithm as hmacEval, wrapped to provide a useful
+// error)
 func hashKDF(key []byte, msg []byte) ([]byte, error) {
 	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
 		panic(errors.New("The input as key for HashKDF should be a 16-byte key."))
@@ -355,14 +371,6 @@ func hashKDF(key []byte, msg []byte) ([]byte, error) {
 }
 
 var HashKDF = hashKDF
-
-// Equals comparison for hashes/MACs
-// Does NOT leak timing.
-func hmacEqual(a []byte, b []byte) bool {
-	return hmac.Equal(a, b)
-}
-
-var HMACEqual = hmacEqual
 
 /*
 ********************************************
