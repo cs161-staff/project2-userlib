@@ -24,7 +24,7 @@ import (
 type UUID = uuid.UUID
 
 // RSA key size (in bits)
-const RSAKeySizeBytes = 2048
+const RSAKeySizeBits = 2048
 
 // AES block size (in bytes)
 const AESBlockSizeBytes = aes.BlockSize
@@ -216,7 +216,7 @@ type DSVerifyKey = PublicKeyType
 
 // Generates a key pair for public-key encryption via RSA
 func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
-	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySizeBytes)
+	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySizeBits)
 	RSAPubKey := RSAPrivKey.PublicKey
 
 	var PKEEncKeyRes PKEEncKey
@@ -271,7 +271,7 @@ var PKEDec = pkeDec
 
 // Generates a key pair for digital signature via RSA
 func dsKeyGen() (DSSignKey, DSVerifyKey, error) {
-	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySizeBytes)
+	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, RSAKeySizeBits)
 	RSAPubKey := RSAPrivKey.PublicKey
 
 	var DSSignKeyRes DSSignKey
