@@ -411,16 +411,13 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 		panic(err)
 	}
 
-	if len(plaintext)%AESBlockSizeBytes != 0 {
-		panic("plaintext is not a multiple of the block size")
-	}
-
-	ciphertext := make([]byte, AESBlockSizeBytes+len(plaintext))
-
-	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(ciphertext[AESBlockSizeBytes:], plaintext)
+	// The IV needs to be unique, but not secure. Therefore it's common to
+	// include it at the beginning of the ciphertext.
+	ciphertext := make([]byte, AESBlockSizeBytes + len(plaintext))
+	
+	mode := cipher.NewCFBEncrypter(block, iv)
+	mode.XORKeyStream(ciphertext[AESBlockSizeBytes:], plaintext)
 	copy(ciphertext[:AESBlockSizeBytes], iv)
-	// example taken here https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
 
 	return ciphertext
 }
@@ -434,17 +431,17 @@ func symDec(key []byte, ciphertext []byte) []byte {
 		panic(err)
 	}
 
-	iv := ciphertext[:AESBlockSizeBytes]
-	plaintext := make([]byte, len(ciphertext)-AESBlockSizeBytes)
-
-	if len(plaintext)%AESBlockSizeBytes != 0 {
-		panic("ciphertext is not a multiple of the block size")
+	if len(ciphertext) < aes.BlockSize {
+		panic("ciphertext too short")
 	}
 
-	mode := cipher.NewCBCDecrypter(block, iv)
+	iv := ciphertext[:AESBlockSizeBytes]
+	ciphertext = ciphertext[AESBlockSizeBytes:]
 
-	// usage adapted from this page https://golang.org/pkg/crypto/cipher/#NewCBCEncrypter
-	mode.CryptBlocks(plaintext, ciphertext[AESBlockSizeBytes:])
+	plaintext := make([]byte, len(ciphertext))
+
+	mode := cipher.NewCFBDecrypter(block, iv)
+	mode.XORKeyStream(plaintext, ciphertext)
 
 	return plaintext
 }

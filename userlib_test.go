@@ -237,7 +237,7 @@ func TestArgon2(t *testing.T) {
 }
 
 func TestStreamCipher(t *testing.T) {
-	someBlockSizeMsg := strings.Repeat("A", AESBlockSizeBytes)
+	someMsg := strings.Repeat("A", 123)
 	iv := RandomBytes(16)
 	t.Log("Random IV:", iv)
 
@@ -254,13 +254,13 @@ func TestStreamCipher(t *testing.T) {
 	}
 
 	t.Log("Before SymEnc()")
-	ciphertext := SymEnc(key1, iv, []byte(someBlockSizeMsg))
-
+	ciphertext := SymEnc(key1, iv, []byte(someMsg))
+	
 	t.Log("Before SymDec()")
 	decryption := SymDec(key1, ciphertext)
 
 	t.Log("Decrypted message:", string(decryption))
-	if string(decryption) != someBlockSizeMsg {
+	if string(decryption) != someMsg {
 		t.Error("Symmetric decryption failure")
 	}
 	if !wrapped {
