@@ -1,13 +1,13 @@
 package userlib
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
-
-	"io"
 
 	"crypto"
 	"crypto/aes"
@@ -16,6 +16,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha512"
+	"crypto/x509"
+	"io"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
@@ -46,12 +48,24 @@ func SetDebugStatus(status bool) {
 	DebugPrint = status
 }
 
-func DebugMsg(format string, args ...interface{}) {
-	if DebugPrint {
-		msg := fmt.Sprintf("%v ", time.Now().Format("15:04:05.00000"))
-		log.Printf(msg+strings.Trim(format, "\r\n ")+"\n", args...)
-	}
+func DebugHeader(format string, args ...interface{}) {
+	DebugMsg(strings.Repeat("-", 50))
+	DebugMsg(format, args)
+	DebugMsg(strings.Repeat("-", 50))
 }
+
+func DebugMsg(format string, args ...interface{}) {
+	// if DebugPrint {
+	msg := fmt.Sprintf("%v ", time.Now().Format("15:04:05.00000"))
+	log.Printf(msg+strings.Trim(format, "\r\n ")+"\n", args...)
+	// }
+}
+
+func truncate(data []byte) (truncated string) {
+	return fmt.Sprintf("%x...", data[:4])
+}
+
+var Truncate = truncate
 
 // RandomBytes. Helper function: Returns a byte slice of the specified
 // size filled with random data
@@ -60,6 +74,10 @@ func randomBytes(size int) (data []byte) {
 	if _, err := io.ReadFull(rand.Reader, data); err != nil {
 		panic(err)
 	}
+	t, _ := json.Marshal(data)
+	DebugMsg("RandomBytes returning: %s", t)
+	record(data, "RandomBytes(%s)", truncate(data))
+	record(t, "RandomBytes(%s)", truncate(data))
 	return
 }
 
@@ -82,6 +100,91 @@ var datastoreBandwidth = 0
 // Datastore and Keystore variables
 var datastore map[UUID][]byte = make(map[UUID][]byte)
 var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
+
+// Symbols Table
+var symbols map[string]string = make(map[string]string)
+
+// Symbols Table
+// var debugValues map[[]byte]string = make(map[[]byte]string)
+/*
+
+userlib.rand()
+[616c.... : Rand1]
+
+[e91df... : Argon2Key(plaintext, Rand1, 16)]
+
+*/
+
+
+// var debugLookup(key []byte, category string) (string) {
+// 	value, ok = debugValues[key]
+// 	if (ok && value != nil) {
+// 		return value
+// 	} else {
+// 		debugValues[key] = category + ++debugCounters[category]
+// 	}
+// }
+
+
+func marshal(v interface{}) ([]byte, error) {
+	data, err := json.Marshal(v);
+	if (err != nil) {
+		return nil, err
+	}
+	m1 := regexp.MustCompile(`".*?"`)
+	replaced := m1.ReplaceAllStringFunc(string(data), resolveString)
+
+	m2 := regexp.MustCompile(`{"KeyType":"PKE","PrivKey":{.*?}}}`)
+	replaced = m2.ReplaceAllStringFunc(replaced, resolveString)
+
+	m3 := regexp.MustCompile(`{"KeyType":"DS","PrivKey":{.*?}}}`)
+	replaced = m3.ReplaceAllStringFunc(replaced, resolveString)
+
+	record(data, "Marshal(%s)", replaced)
+	return data, nil
+}
+
+func unmarshal(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
+
+var Unmarshal = unmarshal
+var Marshal = marshal
+
+/*
+********************************************
+**        Symbolic Debug Functions        **
+********************************************
+*/
+func resolve(data []byte) (string) {
+	result, ok := symbols[string(data)]
+	if ok {
+		return result
+	}
+
+	return truncate([]byte(data))
+}
+
+func resolveString(data string) string {
+	extracted := data
+	if data[0] == byte('"') {
+		extracted = data[1:len(data) - 1]
+	}
+	// DebugMsg("Resolving String: %s", extracted)
+	result, ok := symbols[extracted]
+	if ok {
+		// DebugMsg("Found Resolution: %s", result)
+		return result
+	}
+	// DebugMsg("Didn't Find Resolution: %s", extracted)
+	return data
+}
+
+func record(key []byte, template string, values ...interface{}) {
+	s := fmt.Sprintf(template, values...)
+	symbols[string(key)] = s
+	DebugMsg("%s => %s", truncate(key), s)
+}
 
 /*
 ********************************************
@@ -153,8 +256,8 @@ var KeystoreClear = keystoreClear
 // Sets the value in the keystore
 func keystoreSet(key string, value PublicKeyType) error {
 	_, present := keystore[key]
-	if present != false {
-		return errors.New("That entry in the Keystore has been taken.")
+	if present {
+		return errors.New("entry in keystore has been taken")
 	}
 
 	keystore[key] = value
@@ -193,7 +296,12 @@ func KeystoreGetMap() map[string]PublicKeyType {
 // Argon2:  Automatically chooses a decent combination of iterations and memory
 // Use this to generate a key from a password
 func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
-	return argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
+	result := argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
+
+	// Symbolic logging
+	record(result, "Argon2Key(password=%s, salt=%s, keyLen=%d)", string(password), string(salt), keyLen)
+
+	return result
 }
 
 var Argon2Key = argon2Key
@@ -208,11 +316,36 @@ var Argon2Key = argon2Key
 // SHA512: Returns the checksum of data.
 func hash(data []byte) []byte {
 	hashVal := sha512.Sum512(data)
-	return hashVal[:] // Converting from [64]byte array to []byte slice
+	// debugValues[hashVal] = fmt.Sprintf("Hash(%s)", data)
+	result := hashVal[:]
+	record(result, "Hash(data=%s)", resolve(data))
+	return result // Converting from [64]byte array to []byte slice
 }
 
 // Hash returns a byte slice containing the SHA512 hash of the given byte slice.
 var Hash = hash
+
+func uuidNew() UUID {
+	result := uuid.New()
+	record([]byte(result.String()), "UUID(%s)", truncate([]byte(result.String())))
+	return result
+}
+
+var UUIDNew = uuidNew
+
+func uuidFromBytes(b []byte) (result UUID, err error) {
+	if len(b) < 16 {
+		panic("UUIDFromBytes expects an input greater than or equal to 16 characters.")
+	}
+	result, err = uuid.FromBytes(b[:16])
+	if err != nil {
+		return uuid.New(), err
+	}
+	record([]byte(result.String()), "UUID(b=%s)", resolve(b))
+	return result, err
+}
+
+var UUIDFromBytes = uuidFromBytes
 
 /*
 ********************************************
@@ -233,6 +366,31 @@ type PKEDecKey = PrivateKeyType
 type DSSignKey = PrivateKeyType
 type DSVerifyKey = PublicKeyType
 
+func recordKeys(publicKey rsa.PublicKey, privateKey rsa.PrivateKey, 
+				publicKeyStruct interface{}, privateKeyStruct interface{},
+				publicKeyFormat string, privateKeyFormat string) {
+
+					
+	publicKeyId := truncate(x509.MarshalPKCS1PublicKey(&publicKey))
+	privateKeyId := truncate(x509.MarshalPKCS1PrivateKey(&privateKey))
+
+	record(x509.MarshalPKCS1PublicKey(&publicKey), publicKeyFormat, publicKeyId)
+	record(x509.MarshalPKCS1PrivateKey(&privateKey), privateKeyFormat, privateKeyId)
+
+	// This is for the case where the key is used inside of a struct and we have to regex on the struct's marshalled type
+	pub, err := json.Marshal(publicKeyStruct)
+	if err != nil {
+		panic("uhoh")
+	}
+	record(pub, publicKeyFormat, publicKeyId)
+
+	priv, err := json.Marshal(privateKeyStruct)
+	if err != nil {
+		panic("uhoh")
+	}
+	record(priv, privateKeyFormat, privateKeyId)
+}
+
 // Generates a key pair for public-key encryption via RSA
 func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
 	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, rsaKeySizeBits)
@@ -245,6 +403,8 @@ func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
 	var PKEDecKeyRes PKEDecKey
 	PKEDecKeyRes.KeyType = "PKE"
 	PKEDecKeyRes.PrivKey = *RSAPrivKey
+	
+	recordKeys(RSAPubKey, *RSAPrivKey, PKEEncKeyRes, PKEDecKeyRes, "PKEEncKey(%s)", "PKEDecKey(%s)")
 
 	return PKEEncKeyRes, PKEDecKeyRes, err
 }
@@ -261,7 +421,13 @@ func pkeEnc(ek PKEEncKey, plaintext []byte) ([]byte, error) {
 
 	ciphertext, err := rsa.EncryptOAEP(sha512.New(), rand.Reader, RSAPubKey, plaintext, nil)
 
-	return ciphertext, err
+	if err != nil {
+		return nil, err
+	}
+
+	record(ciphertext, "PKEEnc(ek=%s, plaintext=%s)", resolve(x509.MarshalPKCS1PublicKey(&ek.PubKey)), resolve([]byte(plaintext)))
+
+	return ciphertext, nil
 }
 
 var PKEEnc = pkeEnc
@@ -275,8 +441,13 @@ func pkeDec(dk PKEDecKey, ciphertext []byte) ([]byte, error) {
 	}
 
 	decryption, err := rsa.DecryptOAEP(sha512.New(), rand.Reader, RSAPrivKey, ciphertext, nil)
+	if err != nil {
+		return nil, err
+	}
+		
+	record(decryption, "PKEDec(dk=%s, ciphertext=%s)", resolve(x509.MarshalPKCS1PrivateKey(&dk.PrivKey)), resolve([]byte(ciphertext)))
 
-	return decryption, err
+	return decryption, nil
 }
 
 var PKEDec = pkeDec
@@ -301,6 +472,8 @@ func dsKeyGen() (DSSignKey, DSVerifyKey, error) {
 	DSVerifyKeyRes.KeyType = "DS"
 	DSVerifyKeyRes.PubKey = RSAPubKey
 
+	recordKeys(RSAPubKey, *RSAPrivKey, DSSignKeyRes, DSVerifyKeyRes, "DSVerifyKey(%s)", "DSSignKey(%s)")
+
 	return DSSignKeyRes, DSVerifyKeyRes, err
 }
 
@@ -317,8 +490,18 @@ func dsSign(sk DSSignKey, msg []byte) ([]byte, error) {
 	hashed := sha512.Sum512(msg)
 
 	sig, err := rsa.SignPKCS1v15(rand.Reader, RSAPrivKey, crypto.SHA512, hashed[:])
+	if (err != nil) {
+		return nil, err
+	}
+	
+	// val, err := json.Marshal(sig)
+	// if err != nil {
+	// 	panic("uhoh")
+	// }
+	DebugMsg("Saving Signature: %x", sig)
+	record(sig, "DSSign(sk=%s, msg=%s)", resolve(x509.MarshalPKCS1PrivateKey(&sk.PrivKey)), resolve([]byte(msg)))
 
-	return sig, err
+	return sig, nil
 }
 
 var DSSign = dsSign
@@ -335,7 +518,11 @@ func dsVerify(vk DSVerifyKey, msg []byte, sig []byte) error {
 
 	err := rsa.VerifyPKCS1v15(RSAPubKey, crypto.SHA512, hashed[:], sig)
 
-	return err
+	if err != nil {
+		return err
+	} else {
+		return nil
+	}
 }
 
 var DSVerify = dsVerify
@@ -356,6 +543,10 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 	mac := hmac.New(sha512.New, key)
 	mac.Write(msg)
 	res := mac.Sum(nil)
+	// debugValues[res] = fmt.Sprintf("HMAC(key=%s, msg=%s)", debugLookup(key), debugLookup(msg))
+
+	record(res, "HMAC(key=%s, msg=%s)", resolve(key), resolve(msg))
+
 	return res, nil
 }
 
@@ -386,6 +577,9 @@ func hashKDF(key []byte, msg []byte) ([]byte, error) {
 	mac := hmac.New(sha512.New, key)
 	mac.Write(msg)
 	res := mac.Sum(nil)
+
+	record(res, "HashKDF(key=%s, msg=%s)", resolve(key), resolve(msg))
+
 	return res, nil
 }
 
@@ -398,9 +592,8 @@ var HashKDF = hashKDF
 ********************************************
  */
 
-// Encrypts a byte slice with AES-CBC
+// Encrypts a byte slice with AES-CFB
 // Length of iv should be == AESBlockSizeBytes
-// Length of plaintext should be divisible by AESBlockSize
 func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 	if len(iv) != AESBlockSizeBytes {
 		panic("IV length not equal to AESBlockSizeBytes")
@@ -411,7 +604,7 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 		panic(err)
 	}
 
-	// The IV needs to be unique, but not secure. Therefore it's common to
+	// The IV needs to be unique, but not secret. Therefore it's common to
 	// include it at the beginning of the ciphertext.
 	ciphertext := make([]byte, AESBlockSizeBytes + len(plaintext))
 	
@@ -419,12 +612,14 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 	mode.XORKeyStream(ciphertext[AESBlockSizeBytes:], plaintext)
 	copy(ciphertext[:AESBlockSizeBytes], iv)
 
+	record(ciphertext, "SymEnc(key=%s, iv=%s, plaintext=%s)", resolve(key), resolve(iv), resolve([]byte(plaintext)))
+
 	return ciphertext
 }
 
 var SymEnc = symEnc
 
-// Decrypts a ciphertext encrypted with AES-CTR
+// Decrypts a ciphertext encrypted with AES-CFB
 func symDec(key []byte, ciphertext []byte) []byte {
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -442,6 +637,25 @@ func symDec(key []byte, ciphertext []byte) []byte {
 
 	mode := cipher.NewCFBDecrypter(block, iv)
 	mode.XORKeyStream(plaintext, ciphertext)
+
+	// Debug logging
+	// Can cause collisions in the symbol table, but since plaintexts should never
+	// appear in the DataStore (and therefore never get resolved), this shouldn't
+	// cause any issues.
+
+	/* 
+	SymEnc("Hello") => 1234
+	SymEnc("Hello") => 5678
+	
+	[5678: SymEnc("Hello"), 1234: SymEnc("Hello")]
+
+	SymDec(1234) => SymDec(key=k, ciphertext=1234)
+	
+
+
+	*/
+	
+	record(plaintext, "SymDec(key=%s, ciphertext=%s)", resolve(key), resolve(ciphertext))
 
 	return plaintext
 }
