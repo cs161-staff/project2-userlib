@@ -61,8 +61,31 @@ func DebugMsg(format string, args ...interface{}) {
 	// }
 }
 
+func stripQuotes(data []byte) (cleaned []byte) {
+	strData := string(data)
+	if len(strData) < 2 {
+		return data
+	}
+	if (strData[0] == byte('"') && strData[len(strData) - 1] == byte('"')) {
+		return []byte(strData[1:len(strData) - 1])
+	} else {
+		return data
+	}
+}
+
 func truncate(data []byte) (truncated string) {
-	return fmt.Sprintf("%x...", data[:4])
+	data = stripQuotes(data)
+	if len(data) < 8 {
+		return fmt.Sprintf("%s...", data)
+	} else {
+		return fmt.Sprintf("%s...", data[:8])
+	}
+	
+}
+
+func keyFromBytes(data []byte) (truncated string) {
+	output := fmt.Sprintf("%x", sha512.Sum512(data))
+	return output
 }
 
 var Truncate = truncate
@@ -106,10 +129,18 @@ var symbols map[string]string = make(map[string]string)
 func DebugPrintDatastore() {
 	msg := "\n\nDATASTORE:\n\n"
 	for key, element := range datastore {
-		msg += fmt.Sprintf("[%s] => %s\n", resolve([]byte(key.String())), resolve(element))
+		msg += fmt.Sprintf("\n\n--------------------\n%s\n--------------------\n%s\n", resolve(stringToByte(key.String())), resolve(element))
 	}
 	DebugMsg("%s\n", msg)
 }
+
+// func DebugPrintDatastore() {
+// 	msg := "\n\nSYMBOLS:\n\n"
+// 	for key, element := range symbols {
+// 		msg += fmt.Sprintf("\n\n--------------------\n%s\n--------------------\n%s\n", key, element)
+// 	}
+// 	DebugMsg("%s\n", msg)
+// }
 
 func marshal(v interface{}) ([]byte, error) {
 	data, err := json.Marshal(v);
@@ -142,11 +173,11 @@ var Marshal = marshal
 ********************************************
 */
 func resolve(data []byte) (string) {
-	if result, found := symbols[truncate(data)]; found {
+	if result, found := symbols[keyFromBytes(data)]; found {
 		return result
 	}
 
-	return truncate([]byte(data))
+	return truncate(data)
 }
 
 func resolveString(data string) string {
@@ -155,7 +186,7 @@ func resolveString(data string) string {
 		extracted = data[1:len(data) - 1]
 	}
 	
-	if result, ok := symbols[extracted]; ok {
+	if result, ok := symbols[keyFromBytes(stringToByte(extracted))]; ok {
 		return result
 	}
 	return data
@@ -163,8 +194,13 @@ func resolveString(data string) string {
 
 func record(key []byte, template string, values ...interface{}) {
 	s := fmt.Sprintf(template, values...)
-	symbols[truncate(key)] = s
-	// DebugMsg("%s => %s", truncate(key), s)
+	symbols[keyFromBytes(key)] = s
+	DebugMsg("%s => %s", truncate(key), s)
+}
+
+func stringToByte(data string) (result []byte) {
+	result, _ = json.Marshal(data)
+	return
 }
 
 /*
@@ -301,7 +337,8 @@ func hash(data []byte) []byte {
 	result := hashVal[:]
 	DebugMsg("Hashing: %s", string(data))
 	record(result, "Hash(data=%s)", resolve(data))
-	
+	record(result[:16], "Hash(data=%s)[:16]", resolve(data))
+
 	return result // Converting from [64]byte array to []byte slice
 }
 
@@ -310,7 +347,7 @@ var Hash = hash
 
 func uuidNew() UUID {
 	result := uuid.New()
-	record([]byte(result.String()), "UUID(%s)", truncate([]byte(result.String())))
+	record(stringToByte(result.String()), "UUID(%s)", truncate(stringToByte(result.String())))
 	return result
 }
 
@@ -324,7 +361,7 @@ func uuidFromBytes(b []byte) (result UUID, err error) {
 	if err != nil {
 		return uuid.New(), err
 	}
-	record([]byte(result.String()), "UUID(b=%s)", resolve(b))
+	record(stringToByte(result.String()), "UUID(b=%s)", resolve(b))
 	return result, err
 }
 
@@ -408,7 +445,7 @@ func pkeEnc(ek PKEEncKey, plaintext []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	record(ciphertext, "PKEEnc(ek=%s, plaintext=%s)", resolve(x509.MarshalPKCS1PublicKey(&ek.PubKey)), resolve([]byte(plaintext)))
+	record(ciphertext, "PKEEnc(ek=%s, plaintext=%s)", resolve(x509.MarshalPKCS1PublicKey(&ek.PubKey)), resolve(plaintext))
 
 	return ciphertext, nil
 }
@@ -428,7 +465,7 @@ func pkeDec(dk PKEDecKey, ciphertext []byte) ([]byte, error) {
 		return nil, err
 	}
 		
-	record(decryption, "PKEDec(dk=%s, ciphertext=%s)", resolve(x509.MarshalPKCS1PrivateKey(&dk.PrivKey)), resolve([]byte(ciphertext)))
+	record(decryption, "PKEDec(dk=%s, ciphertext=%s)", resolve(x509.MarshalPKCS1PrivateKey(&dk.PrivKey)), resolve(ciphertext))
 
 	return decryption, nil
 }
@@ -481,7 +518,7 @@ func dsSign(sk DSSignKey, msg []byte) ([]byte, error) {
 	// if err != nil {
 	// 	panic("uhoh")
 	// }
-	record(sig, "DSSign(sk=%s, msg=%s)", resolve(x509.MarshalPKCS1PrivateKey(&sk.PrivKey)), resolve([]byte(msg)))
+	record(sig, "DSSign(sk=%s, msg=%s)", resolve(x509.MarshalPKCS1PrivateKey(&sk.PrivKey)), resolve(msg))
 
 	return sig, nil
 }
@@ -527,7 +564,8 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 	res := mac.Sum(nil)
 	// debugValues[res] = fmt.Sprintf("HMAC(key=%s, msg=%s)", debugLookup(key), debugLookup(msg))
 
-	record(res, "HMAC(key=%s, msg=%s)", resolve(key), resolve(msg))
+	record(res, "HMAC(key=%s, msg=%s)", resolve(key), msg)
+	record(res[:16], "HMAC(key=%s, msg=%s)[:16]", resolve(key), msg)
 
 	return res, nil
 }
@@ -561,6 +599,7 @@ func hashKDF(key []byte, msg []byte) ([]byte, error) {
 	res := mac.Sum(nil)
 
 	record(res, "HashKDF(key=%s, msg=%s)", resolve(key), resolve(msg))
+	record(res[:16], "HashKDF(key=%s, msg=%s)[:16]", resolve(key), resolve(msg))
 
 	return res, nil
 }
@@ -594,7 +633,7 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 	mode.XORKeyStream(ciphertext[AESBlockSizeBytes:], plaintext)
 	copy(ciphertext[:AESBlockSizeBytes], iv)
 
-	record(ciphertext, "SymEnc(key=%s, iv=%s, plaintext=%s)", resolve(key), resolve(iv), resolve([]byte(plaintext)))
+	record(ciphertext, "SymEnc(key=%s, iv=%s, plaintext=%s)", resolve(key), resolve(iv), resolve(plaintext))
 
 	return ciphertext
 }
