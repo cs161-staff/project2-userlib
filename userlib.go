@@ -75,8 +75,8 @@ func randomBytes(size int) (data []byte) {
 		panic(err)
 	}
 	t, _ := json.Marshal(data)
-	record(data, "RandomBytes(%s)", truncate(data))
-	record(t, "RandomBytes(%s)", truncate(data))
+	record(data, "Rand(%s)", truncate(data))
+	record(t, "Rand(%s)", truncate(data))
 	return
 }
 
@@ -107,14 +107,6 @@ func DebugPrintDatastore() {
 	msg := "\n\nDATASTORE:\n\n"
 	for key, element := range datastore {
 		msg += fmt.Sprintf("[%s] => %s\n", resolve([]byte(key.String())), resolve(element))
-	}
-	DebugMsg("%s\n", msg)
-}
-
-func DebugPrintSymbolsTable() {
-	msg := "\n\nSYMBOLS TABLE:\n\n"
-	for key, element := range symbols {
-		msg += fmt.Sprintf("[%s] => %s\n", truncate([]byte(key)), element)
 	}
 	DebugMsg("%s\n", msg)
 }
@@ -172,7 +164,7 @@ func resolveString(data string) string {
 func record(key []byte, template string, values ...interface{}) {
 	s := fmt.Sprintf(template, values...)
 	symbols[truncate(key)] = s
-	DebugMsg("%s => %s", truncate(key), s)
+	// DebugMsg("%s => %s", truncate(key), s)
 }
 
 /*
@@ -288,7 +280,7 @@ func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
 	result := argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
 
 	// Symbolic logging
-	record(result, "Argon2Key(password=%s, salt=%s, keyLen=%d)", string(password), string(salt), keyLen)
+	record(result, "Argon2Key(password=%s, salt=%s, keyLen=%d)", string(password), truncate(salt), keyLen)
 
 	return result
 }
@@ -307,7 +299,9 @@ func hash(data []byte) []byte {
 	hashVal := sha512.Sum512(data)
 	// debugValues[hashVal] = fmt.Sprintf("Hash(%s)", data)
 	result := hashVal[:]
+	DebugMsg("Hashing: %s", string(data))
 	record(result, "Hash(data=%s)", resolve(data))
+	
 	return result // Converting from [64]byte array to []byte slice
 }
 
