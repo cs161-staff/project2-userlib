@@ -75,7 +75,6 @@ func randomBytes(size int) (data []byte) {
 		panic(err)
 	}
 	t, _ := json.Marshal(data)
-	DebugMsg("RandomBytes returning: %s", t)
 	record(data, "RandomBytes(%s)", truncate(data))
 	record(t, "RandomBytes(%s)", truncate(data))
 	return
@@ -104,27 +103,21 @@ var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
 // Symbols Table
 var symbols map[string]string = make(map[string]string)
 
-// Symbols Table
-// var debugValues map[[]byte]string = make(map[[]byte]string)
-/*
+func DebugPrintDatastore() {
+	msg := "\n\nDATASTORE:\n\n"
+	for key, element := range datastore {
+		msg += fmt.Sprintf("[%s] => %s\n", resolve([]byte(key.String())), resolve(element))
+	}
+	DebugMsg("%s\n", msg)
+}
 
-userlib.rand()
-[616c.... : Rand1]
-
-[e91df... : Argon2Key(plaintext, Rand1, 16)]
-
-*/
-
-
-// var debugLookup(key []byte, category string) (string) {
-// 	value, ok = debugValues[key]
-// 	if (ok && value != nil) {
-// 		return value
-// 	} else {
-// 		debugValues[key] = category + ++debugCounters[category]
-// 	}
-// }
-
+func DebugPrintSymbolsTable() {
+	msg := "\n\nSYMBOLS TABLE:\n\n"
+	for key, element := range symbols {
+		msg += fmt.Sprintf("[%s] => %s\n", truncate([]byte(key)), element)
+	}
+	DebugMsg("%s\n", msg)
+}
 
 func marshal(v interface{}) ([]byte, error) {
 	data, err := json.Marshal(v);
@@ -157,8 +150,7 @@ var Marshal = marshal
 ********************************************
 */
 func resolve(data []byte) (string) {
-	result, ok := symbols[string(data)]
-	if ok {
+	if result, found := symbols[truncate(data)]; found {
 		return result
 	}
 
@@ -170,19 +162,16 @@ func resolveString(data string) string {
 	if data[0] == byte('"') {
 		extracted = data[1:len(data) - 1]
 	}
-	// DebugMsg("Resolving String: %s", extracted)
-	result, ok := symbols[extracted]
-	if ok {
-		// DebugMsg("Found Resolution: %s", result)
+	
+	if result, ok := symbols[extracted]; ok {
 		return result
 	}
-	// DebugMsg("Didn't Find Resolution: %s", extracted)
 	return data
 }
 
 func record(key []byte, template string, values ...interface{}) {
 	s := fmt.Sprintf(template, values...)
-	symbols[string(key)] = s
+	symbols[truncate(key)] = s
 	DebugMsg("%s => %s", truncate(key), s)
 }
 
@@ -498,7 +487,6 @@ func dsSign(sk DSSignKey, msg []byte) ([]byte, error) {
 	// if err != nil {
 	// 	panic("uhoh")
 	// }
-	DebugMsg("Saving Signature: %x", sig)
 	record(sig, "DSSign(sk=%s, msg=%s)", resolve(x509.MarshalPKCS1PrivateKey(&sk.PrivKey)), resolve([]byte(msg)))
 
 	return sig, nil
