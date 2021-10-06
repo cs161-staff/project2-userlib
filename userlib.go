@@ -1,6 +1,7 @@
 package userlib
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,6 +41,9 @@ const HashSizeBytes = sha512.Size
 // Debug print true/false
 var DebugPrint = false
 
+// Whether to enable the symbolic debugger logging
+var SymbolicDebug = true
+
 // DebugMsg. Helper function: Does formatted printing to stderr if
 // the DebugPrint global is set.  All our testing ignores stderr,
 // so feel free to use this for any sort of testing you want.
@@ -62,33 +66,46 @@ func DebugMsg(format string, args ...interface{}) {
 }
 
 func stripQuotes(data []byte) (cleaned []byte) {
-	strData := string(data)
-	if len(strData) < 2 {
-		return data
-	}
-	if (strData[0] == byte('"') && strData[len(strData) - 1] == byte('"')) {
-		return []byte(strData[1:len(strData) - 1])
+	return data
+	// strData := string(data)
+	// if len(strData) < 2 {
+	// 	return data
+	// } else if strData[0] == byte('"') && strData[len(strData)-1] == byte('"') {
+	// 	return []byte(strData[1 : len(strData)-1])
+	// } else {
+	// 	return data
+	// }
+}
+
+const TRUNCATE_LENGTH = 12
+
+// Takes in byte slice data (with no text interpretation) and cuts it short
+func truncateBytes(data []byte) (truncated string) {
+	//data = stripQuotes(data)
+	dataStr := fmt.Sprintf("%x", data)
+
+	if len(dataStr) < TRUNCATE_LENGTH+3 {
+		return fmt.Sprintf("%s", dataStr)
 	} else {
-		return data
+		return fmt.Sprintf("%s...", dataStr[:TRUNCATE_LENGTH])
 	}
 }
 
-func truncate(data []byte) (truncated string) {
-	data = stripQuotes(data)
-	if len(data) < 8 {
-		return fmt.Sprintf("%s...", data)
+// Takes in string data (with text interpretation) and cuts it short
+func truncateStr(data string) (truncated string) {
+	if len(data) < TRUNCATE_LENGTH+3 {
+		return fmt.Sprintf("%s", data)
 	} else {
-		return fmt.Sprintf("%s...", data[:8])
+		return fmt.Sprintf("%s...", data[:TRUNCATE_LENGTH])
 	}
-	
 }
 
+// Converts byte slice data to valid symbolic map keys.
 func keyFromBytes(data []byte) (truncated string) {
-	output := fmt.Sprintf("%x", sha512.Sum512(data))
-	return output
+	return fmt.Sprintf("%x", sha512.Sum512(data))
 }
 
-var Truncate = truncate
+var Truncate = truncateBytes
 
 // RandomBytes. Helper function: Returns a byte slice of the specified
 // size filled with random data
@@ -97,9 +114,9 @@ func randomBytes(size int) (data []byte) {
 	if _, err := io.ReadFull(rand.Reader, data); err != nil {
 		panic(err)
 	}
-	t, _ := json.Marshal(data)
-	record(data, "Rand(%s)", truncate(data))
-	record(t, "Rand(%s)", truncate(data))
+	// t, _ := json.Marshal(data)
+	record(data, "Rand(%s)", truncateBytes(data))
+	// record(t, "Rand(%s)", truncate(data))
 	return
 }
 
@@ -124,12 +141,15 @@ var datastore map[UUID][]byte = make(map[UUID][]byte)
 var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
 
 // Symbols Table
+// Keys should ALWAYS be directly what is returned from keyFromBytes(data)
+// where data is the data being represented and has type []byte.
+// Everything stored in this table should be represented (in reality) as []byte.
 var symbols map[string]string = make(map[string]string)
 
 func DebugPrintDatastore() {
 	msg := "\n\nDATASTORE:\n\n"
 	for key, element := range datastore {
-		msg += fmt.Sprintf("\n\n--------------------\n%s\n--------------------\n%s\n", resolve(stringToByte(key.String())), resolve(element))
+		msg += fmt.Sprintf("\n\n--------------------\n%s\n--------------------\n%s\n", resolve(key[:]), resolve(element))
 	}
 	DebugMsg("%s\n", msg)
 }
@@ -142,9 +162,25 @@ func DebugPrintDatastore() {
 // 	DebugMsg("%s\n", msg)
 // }
 
+func resolveString(data string) string {
+	extracted := data
+	if data[0] == byte('"') {
+		extracted = data[1 : len(data)-1]
+	}
+
+	recovered, err := base64.StdEncoding.DecodeString(extracted)
+	if err == nil {
+		if result, ok := symbols[keyFromBytes([]byte(recovered))]; ok {
+			return result
+		}
+	}
+
+	return data
+}
+
 func marshal(v interface{}) ([]byte, error) {
-	data, err := json.Marshal(v);
-	if (err != nil) {
+	data, err := json.Marshal(v)
+	if err != nil {
 		return nil, err
 	}
 	m1 := regexp.MustCompile(`".*?"`)
@@ -171,31 +207,19 @@ var Marshal = marshal
 ********************************************
 **        Symbolic Debug Functions        **
 ********************************************
-*/
-func resolve(data []byte) (string) {
+ */
+func resolve(data []byte) string {
 	if result, found := symbols[keyFromBytes(data)]; found {
 		return result
 	}
-
-	return truncate(data)
-}
-
-func resolveString(data string) string {
-	extracted := data
-	if data[0] == byte('"') {
-		extracted = data[1:len(data) - 1]
-	}
-	
-	if result, ok := symbols[keyFromBytes(stringToByte(extracted))]; ok {
-		return result
-	}
-	return data
+	//If not found, assume it's a literal of some sort with text interpretation
+	return truncateStr(string(data))
 }
 
 func record(key []byte, template string, values ...interface{}) {
 	s := fmt.Sprintf(template, values...)
 	symbols[keyFromBytes(key)] = s
-	DebugMsg("%s => %s", truncate(key), s)
+	DebugMsg("%s => %s", truncateBytes(key), s)
 }
 
 func stringToByte(data string) (result []byte) {
@@ -316,7 +340,7 @@ func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
 	result := argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
 
 	// Symbolic logging
-	record(result, "Argon2Key(password=%s, salt=%s, keyLen=%d)", string(password), truncate(salt), keyLen)
+	record(result, "Argon2Key(password=%s, salt=%s, keyLen=%d)", string(password), truncateStr(string(salt)), keyLen)
 
 	return result
 }
@@ -337,7 +361,7 @@ func hash(data []byte) []byte {
 	result := hashVal[:]
 	DebugMsg("Hashing: %s", string(data))
 	record(result, "Hash(data=%s)", resolve(data))
-	record(result[:16], "Hash(data=%s)[:16]", resolve(data))
+	// record(result[:16], "Hash(data=%s)[:16]", resolve(data))
 
 	return result // Converting from [64]byte array to []byte slice
 }
@@ -346,8 +370,10 @@ func hash(data []byte) []byte {
 var Hash = hash
 
 func uuidNew() UUID {
-	result := uuid.New()
-	record(stringToByte(result.String()), "UUID(%s)", truncate(stringToByte(result.String())))
+	//use our randomness to allow seeding
+	bytes := randomBytes(16)
+	result, _ := uuid.FromBytes(bytes)
+	record(bytes, "UUID(rand=%s)", truncateBytes(bytes))
 	return result
 }
 
@@ -361,7 +387,7 @@ func uuidFromBytes(b []byte) (result UUID, err error) {
 	if err != nil {
 		return uuid.New(), err
 	}
-	record(stringToByte(result.String()), "UUID(b=%s)", resolve(b))
+	record(result[:], "UUID(bytes=%s)", resolve(b))
 	return result, err
 }
 
@@ -386,13 +412,12 @@ type PKEDecKey = PrivateKeyType
 type DSSignKey = PrivateKeyType
 type DSVerifyKey = PublicKeyType
 
-func recordKeys(publicKey rsa.PublicKey, privateKey rsa.PrivateKey, 
-				publicKeyStruct interface{}, privateKeyStruct interface{},
-				publicKeyFormat string, privateKeyFormat string) {
+func recordKeys(publicKey rsa.PublicKey, privateKey rsa.PrivateKey,
+	publicKeyStruct interface{}, privateKeyStruct interface{},
+	publicKeyFormat string, privateKeyFormat string) {
 
-					
-	publicKeyId := truncate(x509.MarshalPKCS1PublicKey(&publicKey))
-	privateKeyId := truncate(x509.MarshalPKCS1PrivateKey(&privateKey))
+	publicKeyId := truncateBytes(x509.MarshalPKCS1PublicKey(&publicKey))
+	privateKeyId := truncateBytes(x509.MarshalPKCS1PrivateKey(&privateKey))
 
 	record(x509.MarshalPKCS1PublicKey(&publicKey), publicKeyFormat, publicKeyId)
 	record(x509.MarshalPKCS1PrivateKey(&privateKey), privateKeyFormat, privateKeyId)
@@ -423,7 +448,7 @@ func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
 	var PKEDecKeyRes PKEDecKey
 	PKEDecKeyRes.KeyType = "PKE"
 	PKEDecKeyRes.PrivKey = *RSAPrivKey
-	
+
 	recordKeys(RSAPubKey, *RSAPrivKey, PKEEncKeyRes, PKEDecKeyRes, "PKEEncKey(%s)", "PKEDecKey(%s)")
 
 	return PKEEncKeyRes, PKEDecKeyRes, err
@@ -464,7 +489,7 @@ func pkeDec(dk PKEDecKey, ciphertext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-		
+
 	record(decryption, "PKEDec(dk=%s, ciphertext=%s)", resolve(x509.MarshalPKCS1PrivateKey(&dk.PrivKey)), resolve(ciphertext))
 
 	return decryption, nil
@@ -510,10 +535,10 @@ func dsSign(sk DSSignKey, msg []byte) ([]byte, error) {
 	hashed := sha512.Sum512(msg)
 
 	sig, err := rsa.SignPKCS1v15(rand.Reader, RSAPrivKey, crypto.SHA512, hashed[:])
-	if (err != nil) {
+	if err != nil {
 		return nil, err
 	}
-	
+
 	// val, err := json.Marshal(sig)
 	// if err != nil {
 	// 	panic("uhoh")
@@ -555,7 +580,7 @@ var DSVerify = dsVerify
 
 // Evaluate the HMAC using sha512
 func hmacEval(key []byte, msg []byte) ([]byte, error) {
-	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
+	if len(key) != 16 { // && len(key) != 24 && len(key) != 32 {
 		panic(errors.New("The input as key for HMAC should be a 16-byte key."))
 	}
 
@@ -564,8 +589,8 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 	res := mac.Sum(nil)
 	// debugValues[res] = fmt.Sprintf("HMAC(key=%s, msg=%s)", debugLookup(key), debugLookup(msg))
 
-	record(res, "HMAC(key=%s, msg=%s)", resolve(key), msg)
-	record(res[:16], "HMAC(key=%s, msg=%s)[:16]", resolve(key), msg)
+	record(res, "HMAC(key=%s, msg=%s)", resolve(key), resolve(msg))
+	//record(res[:16], "HMAC(key=%s, msg=%s)[:16]", resolve(key), msg)
 
 	return res, nil
 }
@@ -590,7 +615,7 @@ var HMACEqual = hmacEqual
 // HashKDF (uses the same algorithm as hmacEval, wrapped to provide a useful
 // error)
 func hashKDF(key []byte, msg []byte) ([]byte, error) {
-	if len(key) != 16 && len(key) != 24 && len(key) != 32 {
+	if len(key) != 16 { // && len(key) != 24 && len(key) != 32 {
 		panic(errors.New("The input as key for HashKDF should be a 16-byte key."))
 	}
 
@@ -599,7 +624,7 @@ func hashKDF(key []byte, msg []byte) ([]byte, error) {
 	res := mac.Sum(nil)
 
 	record(res, "HashKDF(key=%s, msg=%s)", resolve(key), resolve(msg))
-	record(res[:16], "HashKDF(key=%s, msg=%s)[:16]", resolve(key), resolve(msg))
+	//record(res[:16], "HashKDF(key=%s, msg=%s)[:16]", resolve(key), resolve(msg))
 
 	return res, nil
 }
@@ -627,8 +652,8 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 
 	// The IV needs to be unique, but not secret. Therefore it's common to
 	// include it at the beginning of the ciphertext.
-	ciphertext := make([]byte, AESBlockSizeBytes + len(plaintext))
-	
+	ciphertext := make([]byte, AESBlockSizeBytes+len(plaintext))
+
 	mode := cipher.NewCFBEncrypter(block, iv)
 	mode.XORKeyStream(ciphertext[AESBlockSizeBytes:], plaintext)
 	copy(ciphertext[:AESBlockSizeBytes], iv)
@@ -664,18 +689,18 @@ func symDec(key []byte, ciphertext []byte) []byte {
 	// appear in the DataStore (and therefore never get resolved), this shouldn't
 	// cause any issues.
 
-	/* 
-	SymEnc("Hello") => 1234
-	SymEnc("Hello") => 5678
-	
-	[5678: SymEnc("Hello"), 1234: SymEnc("Hello")]
+	/*
+		SymEnc("Hello") => 1234
+		SymEnc("Hello") => 5678
 
-	SymDec(1234) => SymDec(key=k, ciphertext=1234)
-	
+		[5678: SymEnc("Hello"), 1234: SymEnc("Hello")]
+
+		SymDec(1234) => SymDec(key=k, ciphertext=1234)
+
 
 
 	*/
-	
+
 	record(plaintext, "SymDec(key=%s, ciphertext=%s)", resolve(key), resolve(ciphertext))
 
 	return plaintext
