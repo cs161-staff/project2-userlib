@@ -65,23 +65,10 @@ func DebugMsg(format string, args ...interface{}) {
 	// }
 }
 
-func stripQuotes(data []byte) (cleaned []byte) {
-	return data
-	// strData := string(data)
-	// if len(strData) < 2 {
-	// 	return data
-	// } else if strData[0] == byte('"') && strData[len(strData)-1] == byte('"') {
-	// 	return []byte(strData[1 : len(strData)-1])
-	// } else {
-	// 	return data
-	// }
-}
-
 const TRUNCATE_LENGTH = 12
 
 // Takes in byte slice data (with no text interpretation) and cuts it short
 func truncateBytes(data []byte) (truncated string) {
-	//data = stripQuotes(data)
 	dataStr := fmt.Sprintf("%x", data)
 
 	if len(dataStr) < TRUNCATE_LENGTH+3 {
@@ -114,9 +101,8 @@ func randomBytes(size int) (data []byte) {
 	if _, err := io.ReadFull(rand.Reader, data); err != nil {
 		panic(err)
 	}
-	// t, _ := json.Marshal(data)
+
 	record(data, "Rand(%s)", truncateBytes(data))
-	// record(t, "Rand(%s)", truncate(data))
 	return
 }
 
@@ -140,12 +126,6 @@ var datastoreBandwidth = 0
 var datastore map[UUID][]byte = make(map[UUID][]byte)
 var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
 
-// Symbols Table
-// Keys should ALWAYS be directly what is returned from keyFromBytes(data)
-// where data is the data being represented and has type []byte.
-// Everything stored in this table should be represented (in reality) as []byte.
-var symbols map[string]string = make(map[string]string)
-
 func DebugPrintDatastore() {
 	msg := "\n\nDATASTORE:\n\n"
 	for key, element := range datastore {
@@ -154,42 +134,18 @@ func DebugPrintDatastore() {
 	DebugMsg("%s\n", msg)
 }
 
-// func DebugPrintDatastore() {
-// 	msg := "\n\nSYMBOLS:\n\n"
-// 	for key, element := range symbols {
-// 		msg += fmt.Sprintf("\n\n--------------------\n%s\n--------------------\n%s\n", key, element)
-// 	}
-// 	DebugMsg("%s\n", msg)
-// }
-
-func resolveString(data string) string {
-	extracted := data
-	if data[0] == byte('"') {
-		extracted = data[1 : len(data)-1]
-	}
-
-	recovered, err := base64.StdEncoding.DecodeString(extracted)
-	if err == nil {
-		if result, ok := symbols[keyFromBytes([]byte(recovered))]; ok {
-			return result
-		}
-	}
-
-	return data
-}
-
 func marshal(v interface{}) ([]byte, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
-	m1 := regexp.MustCompile(`".*?"`)
+	m1 := regexp.MustCompile(`{"KeyType":"PKE","PrivKey":{.*?}}}`)
 	replaced := m1.ReplaceAllStringFunc(string(data), resolveString)
 
-	m2 := regexp.MustCompile(`{"KeyType":"PKE","PrivKey":{.*?}}}`)
+	m2 := regexp.MustCompile(`{"KeyType":"DS","PrivKey":{.*?}}}`)
 	replaced = m2.ReplaceAllStringFunc(replaced, resolveString)
 
-	m3 := regexp.MustCompile(`{"KeyType":"DS","PrivKey":{.*?}}}`)
+	m3 := regexp.MustCompile(`".*?"`)
 	replaced = m3.ReplaceAllStringFunc(replaced, resolveString)
 
 	record(data, "Marshal(%s)", replaced)
@@ -208,12 +164,40 @@ var Marshal = marshal
 **        Symbolic Debug Functions        **
 ********************************************
  */
+
+// Symbols Table
+// Keys should ALWAYS be directly what is returned from keyFromBytes(data)
+// where data is the data being represented and has type []byte.
+// Everything stored in this table should be represented (in reality) as []byte.
+var symbols map[string]string = make(map[string]string)
+
 func resolve(data []byte) string {
 	if result, found := symbols[keyFromBytes(data)]; found {
 		return result
 	}
 	//If not found, assume it's a literal of some sort with text interpretation
 	return truncateStr(string(data))
+}
+
+func resolveString(data string) string {
+	extracted := data
+	if data[0] == byte('"') {
+		extracted = data[1 : len(data)-1]
+	}
+
+	recovered, err := base64.StdEncoding.DecodeString(extracted)
+	if err == nil {
+		DebugMsg("Got here!")
+		if result, ok := symbols[keyFromBytes([]byte(recovered))]; ok {
+			return result
+		}
+	}
+
+	if result, ok := symbols[keyFromBytes([]byte(extracted))]; ok {
+		return result
+	}
+
+	return data
 }
 
 func record(key []byte, template string, values ...interface{}) {
@@ -357,11 +341,9 @@ var Argon2Key = argon2Key
 // SHA512: Returns the checksum of data.
 func hash(data []byte) []byte {
 	hashVal := sha512.Sum512(data)
-	// debugValues[hashVal] = fmt.Sprintf("Hash(%s)", data)
 	result := hashVal[:]
 	DebugMsg("Hashing: %s", string(data))
 	record(result, "Hash(data=%s)", resolve(data))
-	// record(result[:16], "Hash(data=%s)[:16]", resolve(data))
 
 	return result // Converting from [64]byte array to []byte slice
 }
@@ -539,10 +521,6 @@ func dsSign(sk DSSignKey, msg []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// val, err := json.Marshal(sig)
-	// if err != nil {
-	// 	panic("uhoh")
-	// }
 	record(sig, "DSSign(sk=%s, msg=%s)", resolve(x509.MarshalPKCS1PrivateKey(&sk.PrivKey)), resolve(msg))
 
 	return sig, nil
@@ -587,10 +565,8 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 	mac := hmac.New(sha512.New, key)
 	mac.Write(msg)
 	res := mac.Sum(nil)
-	// debugValues[res] = fmt.Sprintf("HMAC(key=%s, msg=%s)", debugLookup(key), debugLookup(msg))
 
 	record(res, "HMAC(key=%s, msg=%s)", resolve(key), resolve(msg))
-	//record(res[:16], "HMAC(key=%s, msg=%s)[:16]", resolve(key), msg)
 
 	return res, nil
 }
@@ -615,7 +591,7 @@ var HMACEqual = hmacEqual
 // HashKDF (uses the same algorithm as hmacEval, wrapped to provide a useful
 // error)
 func hashKDF(key []byte, msg []byte) ([]byte, error) {
-	if len(key) != 16 { // && len(key) != 24 && len(key) != 32 {
+	if len(key) != 16 {
 		panic(errors.New("The input as key for HashKDF should be a 16-byte key."))
 	}
 
@@ -624,7 +600,6 @@ func hashKDF(key []byte, msg []byte) ([]byte, error) {
 	res := mac.Sum(nil)
 
 	record(res, "HashKDF(key=%s, msg=%s)", resolve(key), resolve(msg))
-	//record(res[:16], "HashKDF(key=%s, msg=%s)[:16]", resolve(key), resolve(msg))
 
 	return res, nil
 }
@@ -683,23 +658,6 @@ func symDec(key []byte, ciphertext []byte) []byte {
 
 	mode := cipher.NewCFBDecrypter(block, iv)
 	mode.XORKeyStream(plaintext, ciphertext)
-
-	// Debug logging
-	// Can cause collisions in the symbol table, but since plaintexts should never
-	// appear in the DataStore (and therefore never get resolved), this shouldn't
-	// cause any issues.
-
-	/*
-		SymEnc("Hello") => 1234
-		SymEnc("Hello") => 5678
-
-		[5678: SymEnc("Hello"), 1234: SymEnc("Hello")]
-
-		SymDec(1234) => SymDec(key=k, ciphertext=1234)
-
-
-
-	*/
 
 	record(plaintext, "SymDec(key=%s, ciphertext=%s)", resolve(key), resolve(ciphertext))
 
