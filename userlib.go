@@ -26,92 +26,24 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
+// More info about the UUID type:
+// github.com/google/uuid
 type UUID = uuid.UUID
 
-// RSA key size (in bits)
-const rsaKeySizeBits = 2048
-
 // AES block size (in bytes)
+// https://pkg.go.dev/crypto/aes
 const AESBlockSizeBytes = aes.BlockSize
 
 // AES key size (in bytes)
 const AESKeySizeBytes = 16
 
-// Output size (in bytes) of Hash and MAC
+// Output size (in bytes) of Hash, HMAC, and HashKDF
 const HashSizeBytes = sha512.Size
 
-/*
-********************************************
-**         BETA: Symbolic Debugger        **
-********************************************
+const rsaKeySizeBits = 2048
 
-The Symbolic Debugger is a debugging tool that
-we created to assist with debugging Datastore
-entries. Read the comments below to see what you
-can do with this.
-*/
-
-// This flag enables the Symbolic Debugger
-// If the Symbolic Debugger is causing excessive slowdown or memory usage,
-// you may want to set this to false.
-var SymbolicDebug = true
-
-// This flag enables verbose logging through the Symbolic Debugger
-// If you set this to true, you may want to pipe your output to a file
-// e.g. go test -v > debug.txt
-// to see the full, untrunctated debug logging
-var SymbolicVerbose = true
-
-// This flag sets the maximum key length in the debugger
-// You may want to increase this to a larger number (e.g. 100) if you're using
-// identifiers that have meaning, e.g. "username-{}-filename-{}", and want to see
-// the entire identifier in the symbolic representation.
-var SymbolicMaxLength = 5
-
-// Feel free to use userlib.DebugMsg(...) to print strings to the console.
-func DebugMsg(format string, args ...interface{}) {
-	msg := fmt.Sprintf("%v ", time.Now().Format("15:04:05.00000"))
-	log.Printf(msg+strings.Trim(format, "\r\n ")+"\n", args...)
-}
-
-// The Symbolic Debugger lets you export a snapshot of the Datastore in a symbolic representation.
-// To do this, call DebugExportDatastore("datastore.json"), or any file name of your
-// choice.
-func DebugExportDatastore(outputFile string) {
-	entries := make([]string, 0)
-	for key, element := range datastore {
-		entries = append(entries, fmt.Sprintf(`{"Key": %s, "Value": %s}`, resolve(key[:]), resolve(element)))
-	}
-	output := fmt.Sprintf(`[%s]`, strings.Join(entries, ","))
-	var prettyOutput bytes.Buffer
-	_ = json.Indent(&prettyOutput, []byte(output), "", "  ")
-	_ = ioutil.WriteFile(outputFile, prettyOutput.Bytes(), 0644)
-}
-
-/*
-********************************************
-**         Random Byte Generator         ***
-********************************************
-
-This method may help with random byte generation.
-*/
-
-// RandomBytes. Helper function: Returns a byte slice of the specified
-// size filled with random data
-func randomBytes(size int) (data []byte) {
-	data = make([]byte, size)
-	if _, err := io.ReadFull(rand.Reader, data); err != nil {
-		panic(err)
-	}
-
-	if SymbolicDebug {
-		record(data, `{"userlib.RandomBytes": %s}`, truncateBytes(data))
-	}
-	return
-}
-
-// Can replace this function for development/testing
-var RandomBytes = randomBytes
+// UUID size (in bytes)
+const UUIDSizeBytes = 16
 
 /*
 ********************************************
@@ -289,6 +221,31 @@ var Marshal = marshal
 
 /*
 ********************************************
+**         Random Byte Generator         ***
+********************************************
+
+This method may help with random byte generation.
+*/
+
+// RandomBytes. Helper function: Returns a byte slice of the specified
+// size filled with random data
+func randomBytes(size int) (data []byte) {
+	data = make([]byte, size)
+	_, err := rand.Read(data)
+	if err != nil {
+		panic(err)
+	}
+
+	if SymbolicDebug {
+		record(data, `{"userlib.RandomBytes": %s}`, truncateBytes(data))
+	}
+	return
+}
+
+var RandomBytes = randomBytes
+
+/*
+********************************************
 **               KDF                      **
 **            Argon2Key                   **
 ********************************************
@@ -327,9 +284,20 @@ func hash(data []byte) []byte {
 // Hash returns a byte slice containing the SHA512 hash of the given byte slice.
 var Hash = hash
 
+/*
+********************************************
+**               UUID                     **
+**      UUIDNew(), UUIDFromBytes(...)     **
+********************************************
+
+These functions are wrappers around:
+https://pkg.go.dev/github.com/google/uuid
+*/
+
+// UUIDNew creates a new random UUID.
 func uuidNew() UUID {
 	// Use rand.Rand to allow seeding (though we haven't actually implemented seeding yet).
-	bytes := make([]byte, 16)
+	bytes := make([]byte, UUIDSizeBytes)
 	if _, err := io.ReadFull(rand.Reader, bytes); err != nil {
 		panic(err)
 	}
@@ -342,6 +310,9 @@ func uuidNew() UUID {
 
 var UUIDNew = uuidNew
 
+// UUIDFromBytes creates a new UUID from a byte slice.
+// Returns an error if the slice does not have a length of 16.
+// The bytes are copied from the slice.
 func uuidFromBytes(b []byte) (result UUID, err error) {
 	if len(b) < 16 {
 		return uuid.New(), errors.New("UUIDFromBytes expects an input greater than or equal to 16 characters")
@@ -661,6 +632,54 @@ func symDec(key []byte, ciphertext []byte) []byte {
 }
 
 var SymDec = symDec
+
+/*
+********************************************
+**         BETA: Symbolic Debugger        **
+********************************************
+
+The Symbolic Debugger is a debugging tool that
+we created to assist with debugging Datastore
+entries. Read the comments below to see what you
+can do with this.
+*/
+
+// This flag enables the Symbolic Debugger
+// If the Symbolic Debugger is causing excessive slowdown or memory usage,
+// you may want to set this to false.
+var SymbolicDebug = true
+
+// This flag enables verbose logging through the Symbolic Debugger
+// If you set this to true, you may want to pipe your output to a file
+// e.g. go test -v > debug.txt
+// to see the full, untrunctated debug logging
+var SymbolicVerbose = true
+
+// This flag sets the maximum key length in the debugger
+// You may want to increase this to a larger number (e.g. 100) if you're using
+// identifiers that have meaning, e.g. "username-{}-filename-{}", and want to see
+// the entire identifier in the symbolic representation.
+var SymbolicMaxLength = 5
+
+// Feel free to use userlib.DebugMsg(...) to print strings to the console.
+func DebugMsg(format string, args ...interface{}) {
+	msg := fmt.Sprintf("%v ", time.Now().Format("15:04:05.00000"))
+	log.Printf(msg+strings.Trim(format, "\r\n ")+"\n", args...)
+}
+
+// The Symbolic Debugger lets you export a snapshot of the Datastore in a symbolic representation.
+// To do this, call DebugExportDatastore("datastore.json"), or any file name of your
+// choice.
+func DebugExportDatastore(outputFile string) {
+	entries := make([]string, 0)
+	for key, element := range datastore {
+		entries = append(entries, fmt.Sprintf(`{"Key": %s, "Value": %s}`, resolve(key[:]), resolve(element)))
+	}
+	output := fmt.Sprintf(`[%s]`, strings.Join(entries, ","))
+	var prettyOutput bytes.Buffer
+	_ = json.Indent(&prettyOutput, []byte(output), "", "  ")
+	_ = ioutil.WriteFile(outputFile, prettyOutput.Bytes(), 0644)
+}
 
 // ----------- SYMBOLIC DEBUGGER: PRIVATE METHODS [BEGIN] ---------------
 
