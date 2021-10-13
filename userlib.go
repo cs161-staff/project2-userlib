@@ -273,6 +273,7 @@ var Argon2Key = argon2Key
 // SHA512: Returns the checksum of data.
 func hash(data []byte) []byte {
 	hashVal := sha512.Sum512(data)
+	// Converting from [64]byte array to []byte slice
 	result := hashVal[:]
 	if SymbolicVerbose {
 		record(result, `{"userlib.Hash": {"data": %s}}`, resolve(data))
@@ -296,7 +297,6 @@ https://pkg.go.dev/github.com/google/uuid
 
 // UUIDNew creates a new random UUID.
 func uuidNew() UUID {
-	// Use rand.Rand to allow seeding (though we haven't actually implemented seeding yet).
 	bytes := make([]byte, UUIDSizeBytes)
 	if _, err := io.ReadFull(rand.Reader, bytes); err != nil {
 		panic(err)
@@ -311,7 +311,7 @@ func uuidNew() UUID {
 var UUIDNew = uuidNew
 
 // UUIDFromBytes creates a new UUID from a byte slice.
-// Returns an error if the slice does not have a length of 16.
+// Returns an error if the slice has a length less than 16.
 // The bytes are copied from the slice.
 func uuidFromBytes(b []byte) (result UUID, err error) {
 	if len(b) < 16 {
@@ -359,11 +359,11 @@ func recordKeys(publicKey rsa.PublicKey, privateKey rsa.PrivateKey,
 	record(x509.MarshalPKCS1PrivateKey(&privateKey), privateKeyFormat, privateKeyId)
 
 	// This is for the case where the key is used inside of a struct and we have to regex on the struct's marshalled type
-	pub, _ := json.Marshal(publicKeyStruct)
-	record(pub, publicKeyFormat, publicKeyId)
+	pubKeyJSON, _ := json.Marshal(publicKeyStruct)
+	record(pubKeyJSON, publicKeyFormat, publicKeyId)
 
-	priv, _ := json.Marshal(privateKeyStruct)
-	record(priv, privateKeyFormat, privateKeyId)
+	privKeyJSON, _ := json.Marshal(privateKeyStruct)
+	record(privKeyJSON, privateKeyFormat, privateKeyId)
 }
 
 // Generates a key pair for public-key encryption via RSA
@@ -677,8 +677,8 @@ func DebugExportDatastore(outputFile string) {
 	}
 	output := fmt.Sprintf(`[%s]`, strings.Join(entries, ","))
 	var prettyOutput bytes.Buffer
-	_ = json.Indent(&prettyOutput, []byte(output), "", "  ")
-	_ = ioutil.WriteFile(outputFile, prettyOutput.Bytes(), 0644)
+	json.Indent(&prettyOutput, []byte(output), "", "  ")
+	ioutil.WriteFile(outputFile, prettyOutput.Bytes(), 0644)
 }
 
 // ----------- SYMBOLIC DEBUGGER: PRIVATE METHODS [BEGIN] ---------------
@@ -714,7 +714,8 @@ var symbols map[string]string = make(map[string]string)
 // The `resolve` method attempts to look up a symbol corresponing to some particular data
 // If it's not found, we treat the data as a byte array, and just slice it appropriatly
 func resolve(data []byte) string {
-	if result, found := symbols[keyFromBytes(data)]; found {
+	symbolKey := keyFromBytes(data)
+	if result, found := symbols[symbolKey]; found {
 		return result
 	}
 	// For some WACK reason, this is different than
@@ -722,22 +723,32 @@ func resolve(data []byte) string {
 	return truncateStr(string(data))
 }
 
-// A special resolution method to help with regex-based string resolution
+// A special resolution method to help with regex-based string resolution.
+// When using regexp's ReplaceAllStringFunc method, we need to pass in a
+// function that acts on a found match. That function's signature must be
+// string => string, so we define a special resolveString method to allow
+// for that. The handling of strings is also slightly different than normal
+// byte slices, so we have some special decoding logic as well.
 func resolveString(data string) string {
-	extracted := data
-	if data[0] == byte('"') {
-		extracted = data[1 : len(data)-1]
-	}
 
-	recovered, err := base64.StdEncoding.DecodeString(extracted)
-	if err == nil {
-		if result, ok := symbols[keyFromBytes([]byte(recovered))]; ok {
-			return result
+	doubleQuote := "\""
+
+	if strings.HasPrefix(data, doubleQuote) {
+		trimmed := strings.TrimPrefix(data, doubleQuote)
+		trimmed = strings.TrimSuffix(trimmed, doubleQuote)
+
+		base64Decoded, err := base64.StdEncoding.DecodeString(trimmed)
+		symbolKey := keyFromBytes([]byte(base64Decoded))
+		symbol, found := symbols[symbolKey]
+		if found && err == nil {
+			return symbol
 		}
-	}
 
-	if result, ok := symbols[keyFromBytes([]byte(extracted))]; ok {
-		return result
+		symbolKey = keyFromBytes([]byte(trimmed))
+		symbol, found = symbols[symbolKey]
+		if found {
+			return symbol
+		}
 	}
 
 	return data
