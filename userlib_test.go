@@ -299,6 +299,13 @@ var _ = Describe("Client Tests", func() {
 		})
 	})
 
+	Describe("MapKeyFromBytes", func() {
+		It("should return a storage key of length 128", func() {
+			storageKey := MapKeyFromBytes([]byte("something"))
+			Expect(len(storageKey)).To(Equal(128), "storage key is not length 128.")
+		})
+	})
+
 	Describe("Marshal and Unmarshal", func() {
 		XIt("should have tests here", func() {
 

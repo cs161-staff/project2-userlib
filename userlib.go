@@ -705,8 +705,10 @@ func truncateStr(data string) (truncated string) {
 	return fmt.Sprintf("%s", data_bytes)
 }
 
-// Converts byte slice data to valid symbolic map keys.
-func keyFromBytes(data []byte) (truncated string) {
+// Deterministically converts a byte slice to a string of length 128 that is
+// suitable to use as the storage key in a map and marshal/unmarshal to/from
+// JSON.
+func MapKeyFromBytes(data []byte) (truncated string) {
 	return fmt.Sprintf("%x", sha512.Sum512(data))
 }
 
@@ -717,7 +719,7 @@ var symbols map[string]string = make(map[string]string)
 // The `resolve` method attempts to look up a symbol corresponing to some particular data
 // If it's not found, we treat the data as a byte array, and just slice it appropriatly
 func resolve(data []byte) string {
-	symbolKey := keyFromBytes(data)
+	symbolKey := MapKeyFromBytes(data)
 	if result, found := symbols[symbolKey]; found {
 		return result
 	}
@@ -741,13 +743,13 @@ func resolveString(data string) string {
 		trimmed = strings.TrimSuffix(trimmed, doubleQuote)
 
 		base64Decoded, err := base64.StdEncoding.DecodeString(trimmed)
-		symbolKey := keyFromBytes([]byte(base64Decoded))
+		symbolKey := MapKeyFromBytes([]byte(base64Decoded))
 		symbol, found := symbols[symbolKey]
 		if found && err == nil {
 			return symbol
 		}
 
-		symbolKey = keyFromBytes([]byte(trimmed))
+		symbolKey = MapKeyFromBytes([]byte(trimmed))
 		symbol, found = symbols[symbolKey]
 		if found {
 			return symbol
@@ -759,7 +761,7 @@ func resolveString(data string) string {
 
 func record(key []byte, template string, values ...interface{}) {
 	s := fmt.Sprintf(template, values...)
-	symbols[keyFromBytes(key)] = s
+	symbols[MapKeyFromBytes(key)] = s
 	if SymbolicVerbose {
 		DebugMsg("%s => %s", truncateBytes(key), s)
 	}
