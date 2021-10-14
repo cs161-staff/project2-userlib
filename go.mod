@@ -1,4 +1,4 @@
-module github.com/cs161-staff/userlib
+module github.com/cs161-staff/project2-userlib
 
 go 1.14
 
