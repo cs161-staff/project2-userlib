@@ -1,297 +1,307 @@
 package userlib
 
 import (
-	"bytes"
 	"encoding/hex"
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/google/uuid"
+	// A "dot" import is used here so that the functions in the ginko and gomega
+	// modules can be used without an identifier. For example, Describe() and
+	// Expect() instead of ginko.Describe() and gomega.Expect(). You can read more
+	// about dot imports here:
+	// https://stackoverflow.com/questions/6478962/what-does-the-dot-or-period-in-a-go-import-statement-do
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
-// Golang has a very powerful routine for building tests.
+func TestSetupAndExecution(t *testing.T) {
+	// We are using 2 libraries to help us write readable and maintainable tests:
+	//
+	// (1) Ginkgo, a Behavior Driven Development (BDD) testing framework that
+	//             makes it easy to write expressive specs that describe the
+	//             behavior of your code in an organized manner; and
+	//
+	// (2) Gomega, an assertion/matcher library that allows us to write individual
+	//             assertion statements in tests that read more like natural
+	//             language. For example "Expect(ACTUAL).To(Equal(EXPECTED))".
+	//
+	// In the Ginko framework, a test case signals failure by calling Ginkgo’s
+	// Fail(description string) function. However, we are using the Gomega library
+	// to execute our assertion statements. When a Gomega assertion fails, Gomega
+	// calls a GomegaFailHandler, which is a function that must be provided using
+	// gomega.RegisterFailHandler(). Here, we pass Ginko's Fail() function to
+	// Gomega so that Gomega can report failed assertions to the Ginko test
+	// framework, which can take the appropriate action when a test fails.
+	//
+	// This is the sole connection point between Ginkgo and Gomega.
+	RegisterFailHandler(Fail)
 
-// Run with "go test" to run the tests
-
-// And "go test -v" to run verbosely so you see all the logging and
-// what tests pass/fail individually.
-
-// And "go test -cover" to check your code coverage in your tests
-
-// Default test strings
-var key1 []byte = []byte("cs161teststring1")
-var key2 []byte = []byte("cs161teststring2")
-var key3 []byte = []byte("cs161teststring3")
-var key4 []byte = []byte("cs161teststring4")
-var key5 []byte = []byte("cs161teststring5")
-
-// Creates a UUID from the supplied bytes
-// Use for testing only!
-func UUIDFromBytes(t *testing.T, b []byte) (u UUID) {
-	u, err := uuid.FromBytes(b)
-	if err != nil {
-		t.Error("Got FromBytes error:", err)
-	}
-
-	return
+	RunSpecs(t, "Userlib Tests")
 }
 
-func TestUUIDFromBytesDeterministic(t *testing.T) {
-	UUID1 := UUIDFromBytes(t, key1)
-	t.Log(UUID1)
+// ================================================
+// Global variables
+// ================================================
 
-	UUID2 := UUIDFromBytes(t, key1)
-	t.Log(UUID2)
+var key1 []byte
+var key2 []byte
+var key3 []byte
+var key4 []byte
+var key5 []byte
 
-	if UUID1 != UUID2 {
-		t.Error("UUID1 != UUID2")
-		t.Log("UUID1:", UUID1)
-		t.Log("UUID2:", UUID2)
-	}
-}
+// ================================================
+// The top level Describe() contains all tests in
+// this test suite in nested Describe() blocks.
+// ================================================
 
-func TestDatastore(t *testing.T) {
-	UUID1 := UUIDFromBytes(t, key1)
-	UUID2 := UUIDFromBytes(t, key2)
-	UUID3 := UUIDFromBytes(t, key3)
+var _ = Describe("Client Tests", func() {
+	BeforeEach(func() {
+		key1 = []byte("cs161teststring1")
+		key2 = []byte("cs161teststring2")
+		key3 = []byte("cs161teststring3")
+		key4 = []byte("cs161teststring4")
+		key5 = []byte("cs161teststring5")
+	})
 
-	DatastoreSet(UUID1, []byte("foo"))
+	BeforeEach(func() {
+		SymbolicVerbose = false
+	})
 
-	_, valid := DatastoreGet(UUID3)
-	if valid {
-		t.Error("Datastore fetched UUID3 when it wasn't supposed to")
-	}
+	Describe("UUIDFromBytes()", func() {
+		It("should be deterministic", func() {
+			one, _ := UUIDFromBytes(key1)
+			two, _ := UUIDFromBytes(key1)
+			Expect(one).To(Equal(two),
+				"UUIDs created from the same bytes were different")
+		})
+	})
 
-	data, valid := DatastoreGet(UUID1)
-	if !valid || string(data) != "foo" {
-		t.Error("Error with fetching 'foo' from UUID1")
-	}
+	Describe("Datastore", func() {
+		BeforeEach(func() {
+			DatastoreClear()
+			DatastoreResetBandwidth()
+		})
 
-	_, valid = DatastoreGet(UUID3)
-	if valid {
-		t.Error("Returned when nothing, oops")
-	}
+		It("should not return a value for a key that is not set", func() {
+			UUID1, _ := UUIDFromBytes(key1)
+			_, found := DatastoreGet(UUID1)
+			Expect(found).To(BeFalse(),
+				"Datastore returned a value for a key that was not set.")
+		})
 
-	DatastoreSet(UUID2, []byte("bar"))
+		It("should return the expected value for a key that is set", func() {
+			UUID1, _ := UUIDFromBytes(key1)
+			UUID2, _ := UUIDFromBytes(key2)
 
-	data, valid = DatastoreGet(UUID1)
-	if !valid || string(data) != "foo" {
-		t.Error("Error with fetching 'foo' from UUID1")
-	}
+			foo := []byte("foo")
+			DatastoreSet(UUID1, foo)
 
-	DatastoreDelete(UUID1)
+			data, found := DatastoreGet(UUID1)
+			Expect(found).To(BeTrue(), "Could not find a value that was set.")
+			Expect(data).To(Equal(foo), "Did not retrieve the correct value for UUIID1.")
 
-	_, valid = DatastoreGet(UUID1)
-	if valid {
-		t.Error("DatastoreGet succeeded even after deleting UUID1")
-	}
+			bar := []byte("bar")
+			DatastoreSet(UUID2, bar)
 
-	data, valid = DatastoreGet(UUID2)
-	if !valid || string(data) != "bar" {
-		t.Error("Error with fetching 'bar' from UUID2")
-	}
+			data, found = DatastoreGet(UUID2)
+			Expect(found).To(BeTrue(), "Could not find a value that was set.")
+			Expect(data).To(Equal(bar), "Did not retrieve the correct value for UUIID2.")
+		})
 
-	DatastoreClear()
+		It("should correctly delete values", func() {
+			UUID1, _ := UUIDFromBytes(key1)
+			DatastoreSet(UUID1, []byte("foo"))
+			DatastoreDelete(UUID1)
+			_, found := DatastoreGet(UUID1)
+			Expect(found).To(BeFalse(), "Was able to load value from a delete key.")
+		})
 
-	_, valid = DatastoreGet(UUID2)
-	if valid {
-		t.Error("DatastoreGet succeeded even after DatastoreClear")
-	}
+		It("should correctly track the bandwidth usage", func() {
+			DatastoreResetBandwidth()
+			fiveBytes := "ABCDE"
+			UUID1, _ := UUIDFromBytes(key1)
+			DatastoreSet(UUID1, []byte(fiveBytes))
+			bandwidthUsed := DatastoreGetBandwidth()
+			Expect(bandwidthUsed).To(Equal(5),
+				"Incorrect bandwidth calculation after storing 5 bytes.")
 
-	t.Log("Datastore fetch", data)
-	t.Log("Datastore map", DatastoreGetMap())
-	DatastoreClear()
-	t.Log("Datastore map", DatastoreGetMap())
+			DatastoreGet(UUID1)
+			bandwidthUsed = DatastoreGetBandwidth()
+			Expect(bandwidthUsed).To(Equal(10),
+				"Incorrect bandwidth calculation after storing and loading 5 bytes")
+		})
+	})
 
-	// Test bandwidth tracker
-	DatastoreResetBandwidth()
-	fiveBytes := "ABCDE"
-	DatastoreSet(UUID1, []byte(fiveBytes))
-	bandwidthUsed := DatastoreGetBandwidth()
-	if bandwidthUsed != 5 {
-		t.Error("Incorrect bandwidth calculation after storing 5 bytes.")
-	}
-	DatastoreGet(UUID1)
-	bandwidthUsed = DatastoreGetBandwidth()
-	if bandwidthUsed != 10 {
-		t.Error("Incorrect bandwidth calculation after storing and loading 5 bytes")
-	}
-}
+	Describe("Keystore", func() {
+		const storageKeyA = "A"
+		const storageKeyB = "B"
+		var encPubKey PublicKeyType
+		var sigVerifyKey PublicKeyType
 
-func TestKeystore(t *testing.T) {
-	RSAPubKey, _, err1 := PKEKeyGen()
-	_, DSVerifyKey, err2 := DSKeyGen()
+		BeforeEach(func() {
+			KeystoreClear()
+			encPubKey, _, _ = PKEKeyGen()
+			_, sigVerifyKey, _ = DSKeyGen()
+		})
 
-	if err1 != nil || err2 != nil {
-		t.Error("PKEKeyGen() failed")
-	}
+		It("should not return a value for a key that is not set", func() {
+			_, found := KeystoreGet("something")
+			Expect(found).To(BeFalse(),
+				"Keystore returned a value for a key that was not set.")
+		})
 
-	KeystoreSet("user1", RSAPubKey)
-	KeystoreSet("user2", DSVerifyKey)
+		It("should return the expected value for a key that is set", func() {
+			KeystoreSet(storageKeyA, encPubKey)
+			KeystoreSet(storageKeyB, sigVerifyKey)
 
-	_, valid := KeystoreGet("user3")
-	if valid {
-		t.Error("Keystore fetched UUID3 when it wasn't supposed to")
-	}
+			key, found := KeystoreGet(storageKeyA)
+			Expect(found).To(BeTrue(), "Could not find a value that was set.")
+			Expect(key).To(Equal(encPubKey),
+				"Did not retrieve the correct value for storageKeyA.")
 
-	data, valid := KeystoreGet("user1")
-	if !valid {
-		t.Error("Key stored at UUID1 doesn't match")
-	}
+			key, found = KeystoreGet(storageKeyB)
+			Expect(found).To(BeTrue(), "Could not find a value that was set.")
+			Expect(key).To(Equal(sigVerifyKey),
+				"Did not retrieve the correct value for storageKeyB.")
+		})
 
-	data, valid = KeystoreGet("user2")
-	if !valid {
-		t.Error("Key stored at UUID2 doesn't match")
-	}
+		It("should not allow overwriting keys since the Keystore is immutable", func() {
+			keystoreSet(storageKeyA, encPubKey)
+			err := keystoreSet(storageKeyA, sigVerifyKey)
+			Expect(err).ToNot(BeNil(), "Allowed overwriting an existing key.")
+		})
 
-	KeystoreClear()
+		It("should reset state after calling clear", func() {
+			keystoreSet(storageKeyA, encPubKey)
+			key, found := KeystoreGet(storageKeyA)
+			Expect(found).To(BeTrue(), "Could not find a value that was set.")
+			Expect(key).To(Equal(encPubKey),
+				"Did not retrieve the correct value for storageKeyA.")
+			KeystoreClear()
+			_, found = KeystoreGet(storageKeyA)
+			Expect(found).To(BeFalse(), "Found the value even after clearing.")
+		})
 
-	_, valid = KeystoreGet("user1")
-	if valid {
-		t.Error("KeystoreGet succeeded even after KeystoreClear")
-	}
+		Describe("KeystoreGetMap()", func() {
+			It("should return the underlying map", func() {
+				actualPtr := reflect.ValueOf(KeystoreGetMap()).Pointer()
+				expectedPtr := reflect.ValueOf(keystore).Pointer()
+				Expect(actualPtr).To(Equal(expectedPtr),
+					"The map returned was not the underlying keystore map.")
+			})
+		})
+	})
 
-	t.Log("Keystore fetch", data)
-	t.Log("Keystore map", KeystoreGetMap())
-	KeystoreClear()
-	t.Log("Keystore map", KeystoreGetMap())
-}
+	Describe("RSA encrypt and decrypt", func() {
+		// TODO: break this mega test up into discrete test cases
+		It("should work as expected", func() {
+			const someString = "Squeamish Ossifrage"
 
-func TestRSA(t *testing.T) {
+			RSAPubKey, RSAPrivKey, err := PKEKeyGen()
+			Expect(err).To(BeNil(), "PKEKeyGen() failed")
 
-	// Test RSA Encrypt and Decrypt
-	RSAPubKey, RSAPrivKey, err := PKEKeyGen()
-	if err != nil {
-		t.Error("PKEKeyGen() failed", err)
-	}
+			ciphertext, err := PKEEnc(RSAPubKey, []byte(someString))
+			Expect(err).To(BeNil(), "PKEEnc() failed")
 
-	t.Log(RSAPubKey)
-	ciphertext, err := PKEEnc(RSAPubKey, []byte("Squeamish Ossifrage"))
-	if err != nil {
-		t.Error("PKEEnc() error", err)
-	}
+			decryption, err := PKEDec(RSAPrivKey, ciphertext)
+			Expect(err).To(BeNil(), "PKEDec() failed")
+			Expect(string(decryption)).To(Equal(someString),
+				"PKEDec() failed")
 
-	decryption, err := PKEDec(RSAPrivKey, ciphertext)
-	if err != nil || (string(decryption) != "Squeamish Ossifrage") {
-		t.Error("Decryption failed", err)
-	}
+			// Test RSA Sign and Verify
+			DSSignKey, DSVerifyKey, err := DSKeyGen()
+			Expect(err).To(BeNil(), "DSKeyGen() failed")
 
-	// Test RSA Sign and Verify
-	DSSignKey, DSVerifyKey, err := DSKeyGen()
-	if err != nil {
-		t.Error("DSKeyGen() failed", err)
-	}
+			sig, err := DSSign(DSSignKey, []byte(someString))
+			Expect(err).To(BeNil(), "DSSignKey() failed")
 
-	sign, err := DSSign(DSSignKey, []byte("Squeamish Ossifrage"))
-	if err != nil {
-		t.Error("RSA sign failure")
-	}
+			err = DSVerify(DSVerifyKey, []byte(someString), sig)
+			Expect(err).To(BeNil(), "DSVerifyKey() failed")
 
-	err = DSVerify(DSVerifyKey, []byte("Squeamish Ossifrage"), sign)
-	if err != nil {
-		t.Error("RSA verification failure")
-	}
+			err = DSVerify(DSVerifyKey, []byte("foo"), sig)
+			Expect(err).ToNot(BeNil(),
+				"DSVerifyKey() succeeded when it should have failed")
+		})
+	})
 
-	err = DSVerify(DSVerifyKey, []byte("foo"), sign)
-	if err == nil {
-		t.Error("RSA verification worked when it shouldn't")
-	}
+	Describe("HMAC", func() {
+		// TODO: break this mega test up into discrete test cases
+		It("should work as expected", func() {
+			msgA := []byte("foo")
+			msgB := []byte("bar")
 
-	t.Log("Error return", err)
-}
+			hmacForMsgAUsingKey1, _ := HMACEval(key1, msgA)
+			hmacForMsgB, _ := HMACEval(key1, msgB)
+			Expect(hmacForMsgAUsingKey1).ToNot(Equal(hmacForMsgB),
+				"HMACs are equal for different data")
 
-func TestHMAC(t *testing.T) {
-	msga := []byte("foo")
-	msgb := []byte("bar")
+			hmacForMsgAUsingKey2, _ := HMACEval(key2, msgA)
+			Expect(HMACEqual(hmacForMsgAUsingKey1, hmacForMsgAUsingKey2)).To(BeFalse(),
+				"HMACs are equal for different key")
 
-	hmac1a, _ := HMACEval(key1, msga)
-	hmac1b, _ := HMACEval(key1, msgb)
-	if HMACEqual(hmac1a, hmac1b) {
-		t.Error("HMACs are equal for different data")
-	}
+			actual, _ := HMACEval(key1, msgA)
+			Expect(HMACEqual(actual, hmacForMsgAUsingKey1)).To(BeTrue(),
+				"HMACs are not equal when they should be")
+		})
+	})
 
-	hmac2a, _ := HMACEval(key2, msga)
-	if HMACEqual(hmac1a, hmac2a) {
-		t.Error("HMACs are equal for different key")
-	}
+	Describe("Argon2", func() {
+		It("should work as expected", func() {
+			val1 := Argon2Key([]byte("Password"), []byte("nosalt"), 32)
+			val2 := Argon2Key([]byte("Password"), []byte("nosalt"), 64)
+			val3 := Argon2Key([]byte("password"), []byte("nosalt"), 32)
 
-	hmac1a2, _ := HMACEval(key1, msga)
-	if !HMACEqual(hmac1a, hmac1a2) {
-		t.Error("HMACs are not equal when they should be")
-	}
-}
+			Expect(val1).ToNot(Equal(val2), "val1 equals val2 when it should not.")
+			Expect(val1).ToNot(Equal(val3), "val1 equals val3 when it should not.")
+			Expect(val2).ToNot(Equal(val3), "val2 equals val3 when it should not.")
+		})
+	})
 
-func TestArgon2(t *testing.T) {
-	val1 := Argon2Key([]byte("Password"), []byte("nosalt"), 32)
-	val2 := Argon2Key([]byte("Password"), []byte("nosalt"), 64)
-	val3 := Argon2Key([]byte("password"), []byte("nosalt"), 32)
+	Describe("StreamCipher", func() {
+		It("should get back the plaintext when decrypting the ciphertext", func() {
+			expectedPlaintext := strings.Repeat("A", 123)
+			iv := RandomBytes(16)
+			ciphertext := SymEnc(key1, iv, []byte(expectedPlaintext))
+			Expect(ciphertext).ToNot(Equal(expectedPlaintext),
+				"Symmetric encryption failure.")
 
-	equal := bytes.Equal
+			actualPlaintext := SymDec(key1, ciphertext)
+			Expect(string(actualPlaintext)).To(Equal(expectedPlaintext),
+				"Symmetric decryption failure.")
+		})
+	})
 
-	if equal(val1, val2) || equal(val1, val3) || equal(val2, val3) {
-		t.Error("Argon2 problem")
-	}
-	t.Log(hex.EncodeToString(val1))
-	t.Log(hex.EncodeToString(val2))
-	t.Log(hex.EncodeToString(val3))
-}
+	Describe("Hash", func() {
+		It("should work as expected", func() {
+			hash := Hash(key1)
+			expected, err := hex.DecodeString("4a56fb0ee081513a4ea0d22a33a6fba8edb95e1cb59dc1b773e77154c239c62e6377fcf26d80e3d7cf5357ebc1a4d0005fc54eb7b7110e1d5b82abc90ee4967b")
+			Expect(hash).To(BeEquivalentTo(expected), "Hash of key1 is incorrect.")
 
-func TestStreamCipher(t *testing.T) {
-	someMsg := strings.Repeat("A", 123)
-	iv := RandomBytes(16)
-	t.Log("Random IV:", iv)
+			hash = Hash(key2)
+			expected, err = hex.DecodeString("2fa5d1e9acaedc743dc7e3a767e58dd8dfba9f61514c474f77f03b4a565808484bf9bdf5a26d40cdef47a93bc18ee88b192359173d8408b3f3c609e60308e998")
+			Expect(err).To(BeNil(), "Failed to hash key2.")
+			Expect(hash).To(Equal(expected), "Hash of key2 is incorrect.")
 
-	t.Log("Also testing replacing SymDec with wrapper")
-	wrapped := false
+			hash = Hash(key3)
+			expected, err = hex.DecodeString("0283967f6235d50886fb85d9892fa28642533cdf5aaf58ccfce5dadb2b0c0a6ca76f6ff5e0392d796925a34b57becb81904319e921b97718fb9faab597eea37b")
+			Expect(err).To(BeNil(), "Failed to hash key2.")
+			Expect(hash).To(Equal(expected), "Hash of key2 is incorrect.")
 
-	// Save the OLD version of SymDec
-	decryptInternal := SymDec
+			hash = Hash(key4)
+			expected, err = hex.DecodeString("8a168d2b7b4e28e68d4ed9c8828b60dcc3ad57431837b5d310fa767cb3e0c50a9a237e1ed38150c49e2f04f8a74263a1b830337c5aa93d8c7edda07761a4f851")
+			Expect(hash).To(Equal(expected), "Hash of key1 is incorrect.")
 
-	SymDec = func(key []byte, ciphertext []byte) []byte {
-		wrapped = true
-		t.Log("Wrapped decryption called")
-		return decryptInternal(key, ciphertext)
-	}
+			hash = Hash(key5)
+			expected, err = hex.DecodeString("03133ff43f9713e65c4a8906fbabd1d6331e47811e4d870c1d515e3471266e0383444aeb5187de640b7fe3e7505107abe91ec63c7df572f6279cb87d41c4ee61")
+			Expect(err).To(BeNil(), "Failed to hash key5.")
+			Expect(hash).To(Equal(expected), "Hash of key5 is incorrect.")
+		})
+	})
 
-	t.Log("Before SymEnc()")
-	ciphertext := SymEnc(key1, iv, []byte(someMsg))
-	
-	t.Log("Before SymDec()")
-	decryption := SymDec(key1, ciphertext)
+	Describe("Marshal and Unmarshal", func() {
+		XIt("should have tests here", func() {
 
-	t.Log("Decrypted message:", string(decryption))
-	if string(decryption) != someMsg {
-		t.Error("Symmetric decryption failure")
-	}
-	if !wrapped {
-		t.Error("Failed to properly wrap decryption")
-	}
-}
-
-func TestHash(t *testing.T) {
-	t.Log("Hashing test strings")
-	hash1 := Hash(key1)
-	hash2 := Hash(key2)
-	hash3 := Hash(key3)
-	hash4 := Hash(key4)
-	hash5 := Hash(key5)
-
-	expected1, err1 := hex.DecodeString("4a56fb0ee081513a4ea0d22a33a6fba8edb95e1cb59dc1b773e77154c239c62e6377fcf26d80e3d7cf5357ebc1a4d0005fc54eb7b7110e1d5b82abc90ee4967b")
-	expected2, err2 := hex.DecodeString("2fa5d1e9acaedc743dc7e3a767e58dd8dfba9f61514c474f77f03b4a565808484bf9bdf5a26d40cdef47a93bc18ee88b192359173d8408b3f3c609e60308e998")
-	expected3, err3 := hex.DecodeString("0283967f6235d50886fb85d9892fa28642533cdf5aaf58ccfce5dadb2b0c0a6ca76f6ff5e0392d796925a34b57becb81904319e921b97718fb9faab597eea37b")
-	expected4, err4 := hex.DecodeString("8a168d2b7b4e28e68d4ed9c8828b60dcc3ad57431837b5d310fa767cb3e0c50a9a237e1ed38150c49e2f04f8a74263a1b830337c5aa93d8c7edda07761a4f851")
-	expected5, err5 := hex.DecodeString("03133ff43f9713e65c4a8906fbabd1d6331e47811e4d870c1d515e3471266e0383444aeb5187de640b7fe3e7505107abe91ec63c7df572f6279cb87d41c4ee61")
-	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil {
-		t.Error("DecodeString failed")
-	}
-	t.Log("Checking against expected hash from https://sha512.online/")
-	if !bytes.Equal(hash1[:], expected1) || !bytes.Equal(hash2[:], expected2) || !bytes.Equal(hash3[:], expected3) || !bytes.Equal(hash4[:], expected4) || !bytes.Equal(hash5[:], expected5) {
-		t.Error("Hash does not match up")
-	}
-}
-
-// Deliberate fail example
-// func TestFailure(t *testing.T){
-//	t.Log("This test will fail")
-//	t.Error("Test of failure")
-//}
+		})
+	})
+})
