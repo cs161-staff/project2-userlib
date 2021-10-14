@@ -307,8 +307,48 @@ var _ = Describe("Client Tests", func() {
 	})
 
 	Describe("Marshal and Unmarshal", func() {
-		XIt("should have tests here", func() {
+		type Something struct {
+			someString string
+		}
 
+		It("should fail to marshall and unmarshall expected value when casting random bytes to a string", func() {
+			someBytes := randomBytes(400)
+			someBytesAsStr := string(someBytes)
+
+			original := Something{
+				someString: someBytesAsStr,
+			}
+
+			marshalled, err := Marshal(original)
+			Expect(err).To(BeNil(), "Got an error when marhsalling to JSON.")
+
+			var unmarshalled Something
+			err = Unmarshal(marshalled, &unmarshalled)
+			Expect(err).To(BeNil(), "Got an error when unmarhsalling from JSON.")
+
+			Expect(unmarshalled.someString).ToNot(Equal(original.someString),
+				"The string from random bytes was the expected value after "+
+					"unmarshalling, when we expected it to be different.")
+		})
+
+		It("should succeed to marshall and unmarshall expected value when sending random bytes into MapKeyFromBytes()", func() {
+			someBytes := randomBytes(400)
+			someBytesAsStr := MapKeyFromBytes(someBytes)
+
+			original := Something{
+				someString: someBytesAsStr,
+			}
+
+			marshalled, err := Marshal(original)
+			Expect(err).To(BeNil(), "Got an error when marhsalling to JSON.")
+
+			var unmarshalled Something
+			err = Unmarshal(marshalled, &unmarshalled)
+			Expect(err).To(BeNil(), "Got an error when unmarhsalling from JSON.")
+
+			Expect(unmarshalled.someString).ToNot(Equal(original.someString),
+				"The unmarshalled string value did not match the original string "+
+					"value, but we expected it to.")
 		})
 	})
 })
