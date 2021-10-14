@@ -352,13 +352,16 @@ func recordKeys(publicKey rsa.PublicKey, privateKey rsa.PrivateKey,
 	publicKeyStruct interface{}, privateKeyStruct interface{},
 	publicKeyFormat string, privateKeyFormat string) {
 
-	publicKeyId := truncateBytes(x509.MarshalPKCS1PublicKey(&publicKey))
-	privateKeyId := truncateBytes(x509.MarshalPKCS1PrivateKey(&privateKey))
+	publicKeyBytes := x509.MarshalPKCS1PublicKey(&publicKey)
+	publicKeyId := truncateBytes(publicKeyBytes)
+	record(publicKeyBytes, publicKeyFormat, publicKeyId)
 
-	record(x509.MarshalPKCS1PublicKey(&publicKey), publicKeyFormat, publicKeyId)
-	record(x509.MarshalPKCS1PrivateKey(&privateKey), privateKeyFormat, privateKeyId)
+	privateKeyBytes := x509.MarshalPKCS1PrivateKey(&privateKey)
+	privateKeyId := truncateBytes(privateKeyBytes)
+	record(privateKeyBytes, privateKeyFormat, privateKeyId)
 
-	// This is for the case where the key is used inside of a struct and we have to regex on the struct's marshalled type
+	// This is for the case where the key is used inside of a struct and we have
+	// to regex on the struct's marshalled type
 	pubKeyJSON, _ := json.Marshal(publicKeyStruct)
 	record(pubKeyJSON, publicKeyFormat, publicKeyId)
 
