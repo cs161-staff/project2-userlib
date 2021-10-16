@@ -213,7 +213,9 @@ func marshal(v interface{}) ([]byte, error) {
 		m3 := regexp.MustCompile(`".*?"`)
 		replaced = m3.ReplaceAllStringFunc(replaced, resolveString)
 
-		record(data, `%s`, replaced)
+		if SymbolicVerbose {
+			record(data, `%s`, replaced)
+		}
 	}
 	return data, nil
 }
