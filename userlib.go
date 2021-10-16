@@ -123,8 +123,12 @@ var DatastoreDelete = datastoreDelete
 
 // Use this in testing to reset the datastore to empty
 func datastoreClear() {
-	datastore = make(map[UUID][]byte)
-	symbols = make(map[string]string)
+	for k := range datastore {
+		delete(datastore, k)
+	}
+	for k := range symbols {
+		delete(symbols, k)
+	}
 }
 
 var DatastoreClear = datastoreClear
@@ -140,7 +144,9 @@ func DatastoreGetBandwidth() int {
 
 // Use this in testing to reset the keystore to empty
 func keystoreClear() {
-	keystore = make(map[string]PublicKeyType)
+	for k := range keystore {
+		delete(keystore, k)
+	}
 }
 
 var KeystoreClear = keystoreClear
