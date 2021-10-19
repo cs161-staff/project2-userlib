@@ -213,9 +213,7 @@ func marshal(v interface{}) ([]byte, error) {
 		m3 := regexp.MustCompile(`".*?"`)
 		replaced = m3.ReplaceAllStringFunc(replaced, resolveString)
 
-		if SymbolicVerbose {
-			record(data, `%s`, replaced)
-		}
+		record(data, `%s`, replaced)
 	}
 	return data, nil
 }
@@ -263,7 +261,7 @@ var RandomBytes = randomBytes
 // Use this to generate a key from a password
 func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
 	result := argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
-	if SymbolicVerbose {
+	if SymbolicDebug {
 		record(result, `{"userlib.Argon2Key": {"password": %s, "salt": %s, "keyLen": %d}}`, resolve(password), resolve(salt), keyLen)
 	}
 	return result
@@ -283,7 +281,7 @@ func hash(data []byte) []byte {
 	hashVal := sha512.Sum512(data)
 	// Converting from [64]byte array to []byte slice
 	result := hashVal[:]
-	if SymbolicVerbose {
+	if SymbolicDebug {
 		record(result, `{"userlib.Hash": {"data": %s}}`, resolve(data))
 		record(result[:16], `{"userlib.Hash[:16]": {"data": %s}}`, resolve(data))
 	}
@@ -310,7 +308,7 @@ func uuidNew() UUID {
 		panic(err)
 	}
 	result, _ := uuid.FromBytes(bytes)
-	if SymbolicVerbose {
+	if SymbolicDebug {
 		record(bytes, `{"userlib.UUIDNew": %s}`, truncateBytes(bytes))
 	}
 	return result
@@ -527,7 +525,7 @@ var DSVerify = dsVerify
 // Evaluate the HMAC using sha512
 func hmacEval(key []byte, msg []byte) ([]byte, error) {
 	if len(key) != 16 { // && len(key) != 24 && len(key) != 32 {
-		panic("input as key for hmac should be a 16-byte key")
+		return nil, errors.New("input as key for hmac should be a 16-byte key")
 	}
 
 	mac := hmac.New(sha512.New, key)
