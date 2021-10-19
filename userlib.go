@@ -525,7 +525,7 @@ var DSVerify = dsVerify
 // Evaluate the HMAC using sha512
 func hmacEval(key []byte, msg []byte) ([]byte, error) {
 	if len(key) != 16 { // && len(key) != 24 && len(key) != 32 {
-		panic("input as key for hmac should be a 16-byte key")
+		return nil, errors.New("input as key for hmac should be a 16-byte key")
 	}
 
 	mac := hmac.New(sha512.New, key)
