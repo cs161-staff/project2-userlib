@@ -585,7 +585,7 @@ var HashKDF = hashKDF
 ********************************************
  */
 
-// Encrypts a byte slice with AES-CFB
+// Encrypts a byte slice with AES-CTR
 // Length of iv should be == AESBlockSizeBytes
 func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 	if len(iv) != AESBlockSizeBytes {
@@ -601,7 +601,7 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 	// include it at the beginning of the ciphertext.
 	ciphertext := make([]byte, AESBlockSizeBytes+len(plaintext))
 
-	mode := cipher.NewCFBEncrypter(block, iv)
+	mode := cipher.NewCTR(block, iv)
 	mode.XORKeyStream(ciphertext[AESBlockSizeBytes:], plaintext)
 	copy(ciphertext[:AESBlockSizeBytes], iv)
 
@@ -621,7 +621,7 @@ func symDec(key []byte, ciphertext []byte) []byte {
 		panic(err)
 	}
 
-	if len(ciphertext) < aes.BlockSize {
+	if len(ciphertext) < AESBlockSizeBytes {
 		panic("ciphertext too short")
 	}
 
@@ -630,7 +630,7 @@ func symDec(key []byte, ciphertext []byte) []byte {
 
 	plaintext := make([]byte, len(ciphertext))
 
-	mode := cipher.NewCFBDecrypter(block, iv)
+	mode := cipher.NewCTR(block, iv)
 	mode.XORKeyStream(plaintext, ciphertext)
 
 	if SymbolicDebug {
