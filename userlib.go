@@ -614,7 +614,7 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 
 var SymEnc = symEnc
 
-// Decrypts a ciphertext encrypted with AES-CFB
+// Decrypts a ciphertext encrypted with AES-CTR
 func symDec(key []byte, ciphertext []byte) []byte {
 	block, err := aes.NewCipher(key)
 	if err != nil {
