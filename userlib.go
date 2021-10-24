@@ -670,10 +670,15 @@ var SymbolicVerbose = true
 // the entire identifier in the symbolic representation.
 var SymbolicMaxLength = 5
 
+// If DebugOutput is set to false, then DebugMsg will suppress output.
+var DebugOutput = true
+
 // Feel free to use userlib.DebugMsg(...) to print strings to the console.
 func DebugMsg(format string, args ...interface{}) {
-	msg := fmt.Sprintf("%v ", time.Now().Format("15:04:05.00000"))
-	log.Printf(msg+strings.Trim(format, "\r\n ")+"\n", args...)
+	if DebugOutput {
+		msg := fmt.Sprintf("%v ", time.Now().Format("15:04:05.00000"))
+		log.Printf(msg+strings.Trim(format, "\r\n ")+"\n", args...)
+	}
 }
 
 // The Symbolic Debugger lets you export a snapshot of the Datastore in a symbolic representation.
