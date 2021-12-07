@@ -155,7 +155,6 @@ var DatastoreDelete = datastoreDelete
 func datastoreClear() {
 	pid := CurrentSpecReport().LineNumber()
 	datastorePrologue(pid)
-	log.Printf("Clearing datastore for process %d\n", pid)
 	for k := range datastore[pid] {
 		delete(datastore[pid], k)
 	}
