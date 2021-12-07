@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/ginkgo"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/argon2"
 )
 
 // More info about the UUID type:
@@ -154,6 +153,7 @@ var DatastoreDelete = datastoreDelete
 // Use this in testing to reset the datastore to empty
 func datastoreClear() {
 	pid := CurrentSpecReport().LineNumber()
+	fmt.Printf("Clearing datastore shard: %d\n", pid)
 	datastorePrologue(pid)
 	for k := range datastore[pid] {
 		delete(datastore[pid], k)
@@ -308,11 +308,9 @@ var RandomBytes = randomBytes
 // Argon2:  Automatically chooses a decent combination of iterations and memory
 // Use this to generate a key from a password
 func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
-	result := argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
-	if SymbolicDebug {
-		record(result, `{"userlib.Argon2Key": {"password": %s, "salt": %s, "keyLen": %d}}`, resolve(password), resolve(salt), keyLen)
-	}
-	return result
+	// NOTE: THIS IS MONKEY PATCHED FOR FAST TESTING
+	jointData := fmt.Sprintf("%v %v", password, salt)
+	return hash([]byte(jointData))[:keyLen]
 }
 
 var Argon2Key = argon2Key
