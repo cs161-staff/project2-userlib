@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha512"
+	"golang.org/x/crypto/sha3"
 	"crypto/x509"
 
 	. "github.com/onsi/ginkgo"
@@ -309,8 +310,14 @@ var RandomBytes = randomBytes
 // Use this to generate a key from a password
 func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
 	// NOTE: THIS IS MONKEY PATCHED FOR FAST TESTING
-	jointData := fmt.Sprintf("%v %v", password, salt)
-	return hash([]byte(jointData))[:keyLen]
+	actualLen := keyLen
+	if keyLen < 64 {
+		actualLen = 64
+	}
+	h := make([]byte, actualLen)
+	hash := []byte(fmt.Sprintf("%v %v", password, salt))
+	sha3.ShakeSum256(h, hash)
+	return h[:keyLen]
 }
 
 var Argon2Key = argon2Key

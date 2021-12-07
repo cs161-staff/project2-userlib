@@ -253,10 +253,12 @@ var _ = Describe("Client Tests", func() {
 			val1 := Argon2Key([]byte("Password"), []byte("nosalt"), 32)
 			val2 := Argon2Key([]byte("Password"), []byte("nosalt"), 64)
 			val3 := Argon2Key([]byte("password"), []byte("nosalt"), 32)
+			val4 := Argon2Key([]byte("Password"), []byte("nosalt"), 128)
 
 			Expect(val1).ToNot(Equal(val2), "val1 equals val2 when it should not.")
 			Expect(val1).ToNot(Equal(val3), "val1 equals val3 when it should not.")
 			Expect(val2).ToNot(Equal(val3), "val2 equals val3 when it should not.")
+			Expect(val4).ToNot(Equal(val3), "val4 equals val3 when it should not.")
 		})
 	})
 
