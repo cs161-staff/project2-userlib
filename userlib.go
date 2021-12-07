@@ -22,6 +22,8 @@ import (
 	"crypto/sha512"
 	"crypto/x509"
 
+	. "github.com/onsi/ginkgo"
+
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 )
@@ -66,11 +68,16 @@ type PrivateKeyType struct {
 }
 
 // Bandwidth tracker (for measuring efficient append)
-var datastoreBandwidth = 0
+// var datastoreBandwidth = 0
+var datastoreBandwidth map[int]int = make(map[int]int)
 
 // Datastore and Keystore variables
-var datastore map[UUID][]byte = make(map[UUID][]byte)
-var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
+
+var datastore map[int]map[UUID][]byte = make(map[int]map[UUID][]byte)
+var keystore map[int]map[string]PublicKeyType = make(map[int]map[string]PublicKeyType)
+
+// var datastore map[UUID][]byte = make(map[UUID][]byte)
+// var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
 
 type DatastoreEntry struct {
 	UUID  string
@@ -85,25 +92,46 @@ type DatastoreEntry struct {
 ********************************************
  */
 
+func keystorePrologue(pid int) {
+	if _, ok := keystore[pid]; !ok {
+		keystore[pid] = make(map[string]PublicKeyType)
+	}
+}
+
+func datastorePrologue(pid int) {
+	if _, ok := datastore[pid]; !ok {
+		datastore[pid] = make(map[UUID][]byte)
+	}
+	if _, ok := datastoreBandwidth[pid]; !ok {
+		datastoreBandwidth[pid] = 0
+	}
+}
+
 // Sets the value in the datastore
 func datastoreSet(key UUID, value []byte) {
+	pid := GinkgoParallelProcess()
+	datastorePrologue(pid)
+
 	// Update bandwidth tracker
-	datastoreBandwidth += len(value)
+	datastoreBandwidth[pid] += len(value)
 
 	foo := make([]byte, len(value))
 	copy(foo, value)
 
-	datastore[key] = foo
+	datastore[pid][key] = foo
 }
 
 var DatastoreSet = datastoreSet
 
 // Returns the value if it exists
 func datastoreGet(key UUID) (value []byte, ok bool) {
-	value, ok = datastore[key]
+	pid := GinkgoParallelProcess()
+	datastorePrologue(pid)
+
+	value, ok = datastore[pid][key]
 	if ok && value != nil {
 		// Update bandwidth tracker
-		datastoreBandwidth += len(value)
+		datastoreBandwidth[pid] += len(value)
 
 		foo := make([]byte, len(value))
 		copy(foo, value)
@@ -116,15 +144,20 @@ var DatastoreGet = datastoreGet
 
 // Deletes a key
 func datastoreDelete(key UUID) {
-	delete(datastore, key)
+	pid := GinkgoParallelProcess()
+	datastorePrologue(pid)
+	delete(datastore[pid], key)
 }
 
 var DatastoreDelete = datastoreDelete
 
 // Use this in testing to reset the datastore to empty
 func datastoreClear() {
-	for k := range datastore {
-		delete(datastore, k)
+	pid := GinkgoParallelProcess()
+	datastorePrologue(pid)
+	log.Printf("Clearing datastore for process %d\n", pid)
+	for k := range datastore[pid] {
+		delete(datastore[pid], k)
 	}
 	for k := range symbols {
 		delete(symbols, k)
@@ -134,18 +167,25 @@ func datastoreClear() {
 var DatastoreClear = datastoreClear
 
 func DatastoreResetBandwidth() {
-	datastoreBandwidth = 0
+	pid := GinkgoParallelProcess()
+	datastorePrologue(pid)
+	datastoreBandwidth[pid] = 0
 }
 
 // Get number of bytes uploaded/downloaded to/from Datastore.
 func DatastoreGetBandwidth() int {
-	return datastoreBandwidth
+	pid := GinkgoParallelProcess()
+	datastorePrologue(pid)
+	return datastoreBandwidth[pid]
 }
 
 // Use this in testing to reset the keystore to empty
 func keystoreClear() {
-	for k := range keystore {
-		delete(keystore, k)
+	pid := GinkgoParallelProcess()
+	keystorePrologue(pid)
+
+	for k := range keystore[pid] {
+		delete(keystore[pid], k)
 	}
 }
 
@@ -153,12 +193,15 @@ var KeystoreClear = keystoreClear
 
 // Sets the value in the keystore
 func keystoreSet(key string, value PublicKeyType) error {
-	_, present := keystore[key]
+	pid := GinkgoParallelProcess()
+	keystorePrologue(pid)
+
+	_, present := keystore[pid][key]
 	if present {
 		return errors.New("entry in keystore has been taken")
 	}
 
-	keystore[key] = value
+	keystore[pid][key] = value
 	return nil
 }
 
@@ -166,7 +209,9 @@ var KeystoreSet = keystoreSet
 
 // Returns the value if it exists
 func keystoreGet(key string) (value PublicKeyType, ok bool) {
-	value, ok = keystore[key]
+	pid := GinkgoParallelProcess()
+	keystorePrologue(pid)
+	value, ok = keystore[pid][key]
 	return
 }
 
@@ -175,13 +220,17 @@ var KeystoreGet = keystoreGet
 // Use this in testing to get the underlying map if you want
 // to play with the datastore.
 func DatastoreGetMap() map[UUID][]byte {
-	return datastore
+	pid := GinkgoParallelProcess()
+	datastorePrologue(pid)
+	return datastore[pid]
 }
 
 // Use this in testing to get the underlying map if you want
 // to play with the keystore.
 func KeystoreGetMap() map[string]PublicKeyType {
-	return keystore
+	pid := GinkgoParallelProcess()
+	keystorePrologue(pid)
+	return keystore[pid]
 }
 
 /*
@@ -685,8 +734,10 @@ func DebugMsg(format string, args ...interface{}) {
 // To do this, call DebugExportDatastore("datastore.json"), or any file name of your
 // choice.
 func DebugExportDatastore(outputFile string) {
+	pid := GinkgoParallelProcess()
+	datastorePrologue(pid)
 	entries := make([]string, 0)
-	for key, element := range datastore {
+	for key, element := range datastore[pid] {
 		entries = append(entries, fmt.Sprintf(`{"Key": %s, "Value": %s}`, resolve(key[:]), resolve(element)))
 	}
 	output := fmt.Sprintf(`[%s]`, strings.Join(entries, ","))

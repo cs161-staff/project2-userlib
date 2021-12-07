@@ -185,8 +185,10 @@ var _ = Describe("Client Tests", func() {
 
 		Describe("KeystoreGetMap()", func() {
 			It("should return the underlying map", func() {
+				pid := GinkgoParallelProcess()
+				keystorePrologue(pid)
 				actualPtr := reflect.ValueOf(KeystoreGetMap()).Pointer()
-				expectedPtr := reflect.ValueOf(keystore).Pointer()
+				expectedPtr := reflect.ValueOf(keystore[pid]).Pointer()
 				Expect(actualPtr).To(Equal(expectedPtr),
 					"The map returned was not the underlying keystore map.")
 			})
