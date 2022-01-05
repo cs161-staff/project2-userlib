@@ -64,10 +64,6 @@ var _ = Describe("Client Tests", func() {
 		key5 = []byte("cs161teststring5")
 	})
 
-	BeforeEach(func() {
-		SymbolicVerbose = false
-	})
-
 	Describe("UUIDFromBytes()", func() {
 		It("should be deterministic", func() {
 			one, _ := UUIDFromBytes(key1)

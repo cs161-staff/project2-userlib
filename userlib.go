@@ -1,15 +1,11 @@
 package userlib
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
-	"regexp"
 	"strings"
 	"time"
 
@@ -20,7 +16,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha512"
-	"crypto/x509"
 
 	. "github.com/onsi/ginkgo"
 
@@ -158,9 +153,6 @@ func datastoreClear() {
 	for k := range datastore[pid] {
 		delete(datastore[pid], k)
 	}
-	for k := range symbols {
-		delete(symbols, k)
-	}
 }
 
 var DatastoreClear = datastoreClear
@@ -251,18 +243,6 @@ func marshal(v interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if SymbolicDebug {
-		m1 := regexp.MustCompile(`{"KeyType":"PKE","PrivKey":{.*?}}}`)
-		replaced := m1.ReplaceAllStringFunc(string(data), resolveString)
-
-		m2 := regexp.MustCompile(`{"KeyType":"DS","PrivKey":{.*?}}}`)
-		replaced = m2.ReplaceAllStringFunc(replaced, resolveString)
-
-		m3 := regexp.MustCompile(`".*?"`)
-		replaced = m3.ReplaceAllStringFunc(replaced, resolveString)
-
-		record(data, `%s`, replaced)
-	}
 	return data, nil
 }
 
@@ -289,10 +269,6 @@ func randomBytes(size int) (data []byte) {
 	if err != nil {
 		panic(err)
 	}
-
-	if SymbolicDebug {
-		record(data, `{"userlib.RandomBytes": %s}`, truncateBytes(data))
-	}
 	return
 }
 
@@ -309,9 +285,6 @@ var RandomBytes = randomBytes
 // Use this to generate a key from a password
 func argon2Key(password []byte, salt []byte, keyLen uint32) []byte {
 	result := argon2.IDKey(password, salt, 1, 64*1024, 4, keyLen)
-	if SymbolicDebug {
-		record(result, `{"userlib.Argon2Key": {"password": %s, "salt": %s, "keyLen": %d}}`, resolve(password), resolve(salt), keyLen)
-	}
 	return result
 }
 
@@ -329,10 +302,6 @@ func hash(data []byte) []byte {
 	hashVal := sha512.Sum512(data)
 	// Converting from [64]byte array to []byte slice
 	result := hashVal[:]
-	if SymbolicDebug {
-		record(result, `{"userlib.Hash": {"data": %s}}`, resolve(data))
-		record(result[:16], `{"userlib.Hash[:16]": {"data": %s}}`, resolve(data))
-	}
 	return result
 }
 
@@ -356,27 +325,22 @@ func uuidNew() UUID {
 		panic(err)
 	}
 	result, _ := uuid.FromBytes(bytes)
-	if SymbolicDebug {
-		record(bytes, `{"userlib.UUIDNew": %s}`, truncateBytes(bytes))
-	}
 	return result
 }
 
 var UUIDNew = uuidNew
+var UUIDNil = uuid.Nil
 
 // UUIDFromBytes creates a new UUID from a byte slice.
 // Returns an error if the slice has a length less than 16.
 // The bytes are copied from the slice.
 func uuidFromBytes(b []byte) (result UUID, err error) {
 	if len(b) < 16 {
-		return uuid.New(), errors.New("UUIDFromBytes expects an input greater than or equal to 16 characters")
+		return UUIDNil, errors.New("UUIDFromBytes expects an input greater than or equal to 16 characters")
 	}
 	result, err = uuid.FromBytes(b[:16])
 	if err != nil {
-		return uuid.New(), err
-	}
-	if SymbolicDebug {
-		record(result[:], `{"userlib.UUIDFromBytes": %s}`, resolve(b))
+		return UUIDNil, err
 	}
 	return result, err
 }
@@ -402,27 +366,6 @@ type PKEDecKey = PrivateKeyType
 type DSSignKey = PrivateKeyType
 type DSVerifyKey = PublicKeyType
 
-func recordKeys(publicKey rsa.PublicKey, privateKey rsa.PrivateKey,
-	publicKeyStruct interface{}, privateKeyStruct interface{},
-	publicKeyFormat string, privateKeyFormat string) {
-
-	publicKeyBytes := x509.MarshalPKCS1PublicKey(&publicKey)
-	publicKeyId := truncateBytes(publicKeyBytes)
-	record(publicKeyBytes, publicKeyFormat, publicKeyId)
-
-	privateKeyBytes := x509.MarshalPKCS1PrivateKey(&privateKey)
-	privateKeyId := truncateBytes(privateKeyBytes)
-	record(privateKeyBytes, privateKeyFormat, privateKeyId)
-
-	// This is for the case where the key is used inside of a struct and we have
-	// to regex on the struct's marshalled type
-	pubKeyJSON, _ := json.Marshal(publicKeyStruct)
-	record(pubKeyJSON, publicKeyFormat, publicKeyId)
-
-	privKeyJSON, _ := json.Marshal(privateKeyStruct)
-	record(privKeyJSON, privateKeyFormat, privateKeyId)
-}
-
 // Generates a key pair for public-key encryption via RSA
 func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
 	RSAPrivKey, err := rsa.GenerateKey(rand.Reader, rsaKeySizeBits)
@@ -436,9 +379,6 @@ func pkeKeyGen() (PKEEncKey, PKEDecKey, error) {
 	PKEDecKeyRes.KeyType = "PKE"
 	PKEDecKeyRes.PrivKey = *RSAPrivKey
 
-	if SymbolicDebug {
-		recordKeys(RSAPubKey, *RSAPrivKey, PKEEncKeyRes, PKEDecKeyRes, `{"PKEEncKey": %s}`, `{"PKEDecKey": %s}`)
-	}
 	return PKEEncKeyRes, PKEDecKeyRes, err
 }
 
@@ -458,10 +398,6 @@ func pkeEnc(ek PKEEncKey, plaintext []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if SymbolicDebug {
-		record(ciphertext, `{"userlib.PKEEnc": {"ek": %s, "plaintext": %s}}`, resolve(x509.MarshalPKCS1PublicKey(&ek.PubKey)), resolve(plaintext))
-	}
-
 	return ciphertext, nil
 }
 
@@ -478,10 +414,6 @@ func pkeDec(dk PKEDecKey, ciphertext []byte) ([]byte, error) {
 	decryption, err := rsa.DecryptOAEP(sha512.New(), rand.Reader, RSAPrivKey, ciphertext, nil)
 	if err != nil {
 		return nil, err
-	}
-
-	if SymbolicDebug {
-		record(decryption, `{"userlib.PKEDec": {"dk": %s, "ciphertext": %s}}`, resolve(x509.MarshalPKCS1PrivateKey(&dk.PrivKey)), resolve(ciphertext))
 	}
 
 	return decryption, nil
@@ -509,10 +441,6 @@ func dsKeyGen() (DSSignKey, DSVerifyKey, error) {
 	DSVerifyKeyRes.KeyType = "DS"
 	DSVerifyKeyRes.PubKey = RSAPubKey
 
-	if SymbolicDebug {
-		recordKeys(RSAPubKey, *RSAPrivKey, DSSignKeyRes, DSVerifyKeyRes, `{"DSVerifyKey": %s}`, `{"DSSignKey": %s}`)
-	}
-
 	return DSSignKeyRes, DSVerifyKeyRes, err
 }
 
@@ -531,10 +459,6 @@ func dsSign(sk DSSignKey, msg []byte) ([]byte, error) {
 	sig, err := rsa.SignPKCS1v15(rand.Reader, RSAPrivKey, crypto.SHA512, hashed[:])
 	if err != nil {
 		return nil, err
-	}
-
-	if SymbolicDebug {
-		record(sig, `{"userlib.DSSign": {"sk": %s, "msg": %s}}`, resolve(x509.MarshalPKCS1PrivateKey(&sk.PrivKey)), resolve(msg))
 	}
 
 	return sig, nil
@@ -580,11 +504,6 @@ func hmacEval(key []byte, msg []byte) ([]byte, error) {
 	mac.Write(msg)
 	res := mac.Sum(nil)
 
-	if SymbolicDebug {
-		record(res, `{"userlib.HMAC": {"key": %s, "msg": %s}}`, resolve(key), resolve(msg))
-		record(res[:16], `{"userlib.HMAC[:16]": {"key": %s, "msg": %s}}`, resolve(key), resolve(msg))
-	}
-
 	return res, nil
 }
 
@@ -615,11 +534,6 @@ func hashKDF(key []byte, msg []byte) ([]byte, error) {
 	mac := hmac.New(sha512.New, key)
 	mac.Write(msg)
 	res := mac.Sum(nil)
-
-	if SymbolicDebug {
-		record(res, `{"userlib.HashKDF": {"key": %s, "msg": %s}}`, resolve(key), resolve(msg))
-		record(res[:16], `{"userlib.HashKDF[:16]": {"key": %s, "msg": %s}}`, resolve(key), resolve(msg))
-	}
 
 	return res, nil
 }
@@ -653,10 +567,6 @@ func symEnc(key []byte, iv []byte, plaintext []byte) []byte {
 	mode.XORKeyStream(ciphertext[AESBlockSizeBytes:], plaintext)
 	copy(ciphertext[:AESBlockSizeBytes], iv)
 
-	if SymbolicDebug {
-		record(ciphertext, `{"userlib.SymEnc": {"key": %s, "iv": %s, "plaintext": %s}}`, resolve(key), resolve(iv), resolve(plaintext))
-	}
-
 	return ciphertext
 }
 
@@ -681,42 +591,10 @@ func symDec(key []byte, ciphertext []byte) []byte {
 	mode := cipher.NewCTR(block, iv)
 	mode.XORKeyStream(plaintext, ciphertext)
 
-	if SymbolicDebug {
-		record(plaintext, `{"userlib.SymDec": {"key": %s, "ciphertext": %s}}`, resolve(key), resolve(ciphertext))
-	}
-
 	return plaintext
 }
 
 var SymDec = symDec
-
-/*
-********************************************
-**         BETA: Symbolic Debugger        **
-********************************************
-
-The Symbolic Debugger is a debugging tool that
-we created to assist with debugging Datastore
-entries. Read the comments below to see what you
-can do with this.
-*/
-
-// This flag enables the Symbolic Debugger
-// If the Symbolic Debugger is causing excessive slowdown or memory usage,
-// you may want to set this to false.
-var SymbolicDebug = true
-
-// This flag enables verbose logging through the Symbolic Debugger
-// If you set this to true, you may want to pipe your output to a file
-// e.g. go test -v > debug.txt
-// to see the full, untrunctated debug logging
-var SymbolicVerbose = true
-
-// This flag sets the maximum key length in the debugger
-// You may want to increase this to a larger number (e.g. 100) if you're using
-// identifiers that have meaning, e.g. "username-{}-filename-{}", and want to see
-// the entire identifier in the symbolic representation.
-var SymbolicMaxLength = 5
 
 // If DebugOutput is set to false, then DebugMsg will suppress output.
 var DebugOutput = true
@@ -729,103 +607,9 @@ func DebugMsg(format string, args ...interface{}) {
 	}
 }
 
-// The Symbolic Debugger lets you export a snapshot of the Datastore in a symbolic representation.
-// To do this, call DebugExportDatastore("datastore.json"), or any file name of your
-// choice.
-func DebugExportDatastore(outputFile string) {
-	pid := CurrentSpecReport().LineNumber()
-	datastorePrologue(pid)
-	entries := make([]string, 0)
-	for key, element := range datastore[pid] {
-		entries = append(entries, fmt.Sprintf(`{"Key": %s, "Value": %s}`, resolve(key[:]), resolve(element)))
-	}
-	output := fmt.Sprintf(`[%s]`, strings.Join(entries, ","))
-	var prettyOutput bytes.Buffer
-	json.Indent(&prettyOutput, []byte(output), "", "  ")
-	ioutil.WriteFile(outputFile, prettyOutput.Bytes(), 0644)
-}
-
-// ----------- SYMBOLIC DEBUGGER: PRIVATE METHODS [BEGIN] ---------------
-
-// Takes in byte slice data (with no text interpretation) and cuts it short
-func truncateBytes(data []byte) (truncated string) {
-	return truncateStr(fmt.Sprintf("%x", data))
-}
-
-// Takes in string data (with text interpretation) and cuts it short
-func truncateStr(data string) (truncated string) {
-	if len(data) < SymbolicMaxLength+3 {
-		truncated = data
-	} else {
-		truncated = data[:SymbolicMaxLength] + "..."
-	}
-	data_bytes, err := json.Marshal(truncated)
-	if err != nil {
-		panic("symbolic debugger failed in truncateStr with error: " + err.Error())
-	}
-	return fmt.Sprintf("%s", data_bytes)
-}
-
 // Deterministically converts a byte slice to a string of length 128 that is
 // suitable to use as the storage key in a map and marshal/unmarshal to/from
 // JSON.
 func MapKeyFromBytes(data []byte) (truncated string) {
 	return fmt.Sprintf("%x", sha512.Sum512(data))
 }
-
-// The Symbolic Debugger uses a symbols table to map data generated by userlib
-// (e.g. hashes, encrypted strings, signatures, etc.) to their string representation.
-var symbols map[string]string = make(map[string]string)
-
-// The `resolve` method attempts to look up a symbol corresponing to some particular data
-// If it's not found, we treat the data as a byte array, and just slice it appropriatly
-func resolve(data []byte) string {
-	symbolKey := MapKeyFromBytes(data)
-	if result, found := symbols[symbolKey]; found {
-		return result
-	}
-	// For some WACK reason, this is different than
-	// truncateBytes(data). So don't do that.
-	return truncateStr(string(data))
-}
-
-// A special resolution method to help with regex-based string resolution.
-// When using regexp's ReplaceAllStringFunc method, we need to pass in a
-// function that acts on a found match. That function's signature must be
-// string => string, so we define a special resolveString method to allow
-// for that. The handling of strings is also slightly different than normal
-// byte slices, so we have some special decoding logic as well.
-func resolveString(data string) string {
-
-	doubleQuote := "\""
-
-	if strings.HasPrefix(data, doubleQuote) {
-		trimmed := strings.TrimPrefix(data, doubleQuote)
-		trimmed = strings.TrimSuffix(trimmed, doubleQuote)
-
-		base64Decoded, err := base64.StdEncoding.DecodeString(trimmed)
-		symbolKey := MapKeyFromBytes([]byte(base64Decoded))
-		symbol, found := symbols[symbolKey]
-		if found && err == nil {
-			return symbol
-		}
-
-		symbolKey = MapKeyFromBytes([]byte(trimmed))
-		symbol, found = symbols[symbolKey]
-		if found {
-			return symbol
-		}
-	}
-
-	return data
-}
-
-func record(key []byte, template string, values ...interface{}) {
-	s := fmt.Sprintf(template, values...)
-	symbols[MapKeyFromBytes(key)] = s
-	if SymbolicVerbose {
-		DebugMsg("%s => %s", truncateBytes(key), s)
-	}
-}
-
-// ----------- SYMBOLIC DEBUGGER: PRIVATE METHODS [END] ---------------
