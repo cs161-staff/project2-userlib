@@ -1,10 +1,8 @@
 package userlib
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"strings"
 	"time"
@@ -226,35 +224,6 @@ func KeystoreGetMap() map[string]PublicKeyType {
 
 /*
 ********************************************
-**         JSON Marshal/Unmarshal        ***
-********************************************
-
-userlib.Marshal and userlib.Unmarshal are two
-wrapper functions around json.Marshal and
-json.Unmarshal. We wrap around these methods
-to provide symbolic debugger support.
-
-Reference:
-https://pkg.go.dev/encoding/json
-*/
-
-func marshal(v interface{}) ([]byte, error) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
-func unmarshal(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
-}
-
-var Unmarshal = unmarshal
-var Marshal = marshal
-
-/*
-********************************************
 **         Random Byte Generator         ***
 ********************************************
 
@@ -307,45 +276,6 @@ func hash(data []byte) []byte {
 
 // Hash returns a byte slice containing the SHA512 hash of the given byte slice.
 var Hash = hash
-
-/*
-********************************************
-**               UUID                     **
-**      UUIDNew(), UUIDFromBytes(...)     **
-********************************************
-
-These functions are wrappers around:
-https://pkg.go.dev/github.com/google/uuid
-*/
-
-// UUIDNew creates a new random UUID.
-func uuidNew() UUID {
-	bytes := make([]byte, UUIDSizeBytes)
-	if _, err := io.ReadFull(rand.Reader, bytes); err != nil {
-		panic(err)
-	}
-	result, _ := uuid.FromBytes(bytes)
-	return result
-}
-
-var UUIDNew = uuidNew
-var UUIDNil = uuid.Nil
-
-// UUIDFromBytes creates a new UUID from a byte slice.
-// Returns an error if the slice has a length less than 16.
-// The bytes are copied from the slice.
-func uuidFromBytes(b []byte) (result UUID, err error) {
-	if len(b) < 16 {
-		return UUIDNil, errors.New("UUIDFromBytes expects an input greater than or equal to 16 characters")
-	}
-	result, err = uuid.FromBytes(b[:16])
-	if err != nil {
-		return UUIDNil, err
-	}
-	return result, err
-}
-
-var UUIDFromBytes = uuidFromBytes
 
 /*
 ********************************************

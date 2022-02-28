@@ -11,6 +11,7 @@ import (
 	// Expect() instead of ginko.Describe() and gomega.Expect(). You can read more
 	// about dot imports here:
 	// https://stackoverflow.com/questions/6478962/what-does-the-dot-or-period-in-a-go-import-statement-do
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -64,15 +65,6 @@ var _ = Describe("Client Tests", func() {
 		key5 = []byte("cs161teststring5")
 	})
 
-	Describe("UUIDFromBytes()", func() {
-		It("should be deterministic", func() {
-			one, _ := UUIDFromBytes(key1)
-			two, _ := UUIDFromBytes(key1)
-			Expect(one).To(Equal(two),
-				"UUIDs created from the same bytes were different")
-		})
-	})
-
 	Describe("Datastore", func() {
 		BeforeEach(func() {
 			DatastoreClear()
@@ -80,15 +72,15 @@ var _ = Describe("Client Tests", func() {
 		})
 
 		It("should not return a value for a key that is not set", func() {
-			UUID1, _ := UUIDFromBytes(key1)
+			UUID1, _ := uuid.FromBytes(key1)
 			_, found := DatastoreGet(UUID1)
 			Expect(found).To(BeFalse(),
 				"Datastore returned a value for a key that was not set.")
 		})
 
 		It("should return the expected value for a key that is set", func() {
-			UUID1, _ := UUIDFromBytes(key1)
-			UUID2, _ := UUIDFromBytes(key2)
+			UUID1, _ := uuid.FromBytes(key1)
+			UUID2, _ := uuid.FromBytes(key2)
 
 			foo := []byte("foo")
 			DatastoreSet(UUID1, foo)
@@ -106,7 +98,7 @@ var _ = Describe("Client Tests", func() {
 		})
 
 		It("should correctly delete values", func() {
-			UUID1, _ := UUIDFromBytes(key1)
+			UUID1, _ := uuid.FromBytes(key1)
 			DatastoreSet(UUID1, []byte("foo"))
 			DatastoreDelete(UUID1)
 			_, found := DatastoreGet(UUID1)
@@ -116,7 +108,7 @@ var _ = Describe("Client Tests", func() {
 		It("should correctly track the bandwidth usage", func() {
 			DatastoreResetBandwidth()
 			fiveBytes := "ABCDE"
-			UUID1, _ := UUIDFromBytes(key1)
+			UUID1, _ := uuid.FromBytes(key1)
 			DatastoreSet(UUID1, []byte(fiveBytes))
 			bandwidthUsed := DatastoreGetBandwidth()
 			Expect(bandwidthUsed).To(Equal(5),
@@ -301,52 +293,6 @@ var _ = Describe("Client Tests", func() {
 		It("should return a storage key of length 128", func() {
 			storageKey := MapKeyFromBytes([]byte("something"))
 			Expect(len(storageKey)).To(Equal(128), "storage key is not length 128.")
-		})
-	})
-
-	Describe("Marshal and Unmarshal", func() {
-		type Something struct {
-			someString string
-		}
-
-		It("should fail to marshall and unmarshall expected value when casting random bytes to a string", func() {
-			someBytes := randomBytes(400)
-			someBytesAsStr := string(someBytes)
-
-			original := Something{
-				someString: someBytesAsStr,
-			}
-
-			marshalled, err := Marshal(original)
-			Expect(err).To(BeNil(), "Got an error when marhsalling to JSON.")
-
-			var unmarshalled Something
-			err = Unmarshal(marshalled, &unmarshalled)
-			Expect(err).To(BeNil(), "Got an error when unmarhsalling from JSON.")
-
-			Expect(unmarshalled.someString).ToNot(Equal(original.someString),
-				"The string from random bytes was the expected value after "+
-					"unmarshalling, when we expected it to be different.")
-		})
-
-		It("should succeed to marshall and unmarshall expected value when sending random bytes into MapKeyFromBytes()", func() {
-			someBytes := randomBytes(400)
-			someBytesAsStr := MapKeyFromBytes(someBytes)
-
-			original := Something{
-				someString: someBytesAsStr,
-			}
-
-			marshalled, err := Marshal(original)
-			Expect(err).To(BeNil(), "Got an error when marhsalling to JSON.")
-
-			var unmarshalled Something
-			err = Unmarshal(marshalled, &unmarshalled)
-			Expect(err).To(BeNil(), "Got an error when unmarhsalling from JSON.")
-
-			Expect(unmarshalled.someString).ToNot(Equal(original.someString),
-				"The unmarshalled string value did not match the original string "+
-					"value, but we expected it to.")
 		})
 	})
 })
