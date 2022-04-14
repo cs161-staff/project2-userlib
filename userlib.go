@@ -15,6 +15,8 @@ import (
 	"crypto/rsa"
 	"crypto/sha512"
 
+	"sync"
+
 	"golang.org/x/crypto/sha3"
 
 	. "github.com/onsi/ginkgo"
@@ -63,12 +65,19 @@ type PrivateKeyType struct {
 
 // Bandwidth tracker (for measuring efficient append)
 // var datastoreBandwidth = 0
-var datastoreBandwidth map[int]int = make(map[int]int)
+// map[int]*int
+var datastoreBandwidth sync.Map
 
 // Datastore and Keystore variables
 
-var datastore map[int]map[UUID][]byte = make(map[int]map[UUID][]byte)
-var keystore map[int]map[string]PublicKeyType = make(map[int]map[string]PublicKeyType)
+type keystoreType map[string]PublicKeyType
+type datastoreType map[UUID][]byte
+
+// map[int]keystoreType
+var datastore sync.Map
+
+// map[int]datastoreType
+var keystore sync.Map
 
 // var datastore map[UUID][]byte = make(map[UUID][]byte)
 // var keystore map[string]PublicKeyType = make(map[string]PublicKeyType)
@@ -76,6 +85,27 @@ var keystore map[int]map[string]PublicKeyType = make(map[int]map[string]PublicKe
 type DatastoreEntry struct {
 	UUID  string
 	Value string
+}
+
+func getKeystoreShard() keystoreType {
+	pid := CurrentSpecReport().LineNumber()
+	shard, _ := keystore.LoadOrStore(pid, make(keystoreType))
+	shardMap := shard.(keystoreType)
+	return shardMap
+}
+
+func getDatastoreShard() datastoreType {
+	pid := CurrentSpecReport().LineNumber()
+	shard, _ := datastore.LoadOrStore(pid, make(datastoreType))
+	shardMap := shard.(datastoreType)
+	return shardMap
+}
+
+func getDatastoreBandwidthShard() *int {
+	pid := CurrentSpecReport().LineNumber()
+	newBandwidth := 0
+	bandwidth, _ := datastoreBandwidth.LoadOrStore(pid, &newBandwidth)
+	return bandwidth.(*int)
 }
 
 /*
@@ -86,46 +116,29 @@ type DatastoreEntry struct {
 ********************************************
  */
 
-func keystorePrologue(pid int) {
-	if _, ok := keystore[pid]; !ok {
-		keystore[pid] = make(map[string]PublicKeyType)
-	}
-}
-
-func datastorePrologue(pid int) {
-	if _, ok := datastore[pid]; !ok {
-		datastore[pid] = make(map[UUID][]byte)
-	}
-	if _, ok := datastoreBandwidth[pid]; !ok {
-		datastoreBandwidth[pid] = 0
-	}
-}
-
 // Sets the value in the datastore
 func datastoreSet(key UUID, value []byte) {
-	pid := CurrentSpecReport().LineNumber()
-	datastorePrologue(pid)
-
 	// Update bandwidth tracker
-	datastoreBandwidth[pid] += len(value)
+	bandwidth := getDatastoreBandwidthShard()
+	*bandwidth += len(value)
 
 	foo := make([]byte, len(value))
 	copy(foo, value)
 
-	datastore[pid][key] = foo
+	datastoreShard := getDatastoreShard()
+	datastoreShard[key] = foo
 }
 
 var DatastoreSet = datastoreSet
 
 // Returns the value if it exists
 func datastoreGet(key UUID) (value []byte, ok bool) {
-	pid := CurrentSpecReport().LineNumber()
-	datastorePrologue(pid)
-
-	value, ok = datastore[pid][key]
+	datastoreShard := getDatastoreShard()
+	value, ok = datastoreShard[key]
 	if ok && value != nil {
 		// Update bandwidth tracker
-		datastoreBandwidth[pid] += len(value)
+		bandwidth := getDatastoreBandwidthShard()
+		*bandwidth += len(value)
 
 		foo := make([]byte, len(value))
 		copy(foo, value)
@@ -138,45 +151,38 @@ var DatastoreGet = datastoreGet
 
 // Deletes a key
 func datastoreDelete(key UUID) {
-	pid := CurrentSpecReport().LineNumber()
-	datastorePrologue(pid)
-	delete(datastore[pid], key)
+	datastoreShard := getDatastoreShard()
+	delete(datastoreShard, key)
 }
 
 var DatastoreDelete = datastoreDelete
 
 // Use this in testing to reset the datastore to empty
 func datastoreClear() {
-	pid := CurrentSpecReport().LineNumber()
-	fmt.Printf("Clearing datastore shard: %d\n", pid)
-	datastorePrologue(pid)
-	for k := range datastore[pid] {
-		delete(datastore[pid], k)
+	datastoreShard := getDatastoreShard()
+	for k := range datastoreShard {
+		delete(datastoreShard, k)
 	}
 }
 
 var DatastoreClear = datastoreClear
 
 func DatastoreResetBandwidth() {
-	pid := CurrentSpecReport().LineNumber()
-	datastorePrologue(pid)
-	datastoreBandwidth[pid] = 0
+	bandwidth := getDatastoreBandwidthShard()
+	*bandwidth = 0
 }
 
 // Get number of bytes uploaded/downloaded to/from Datastore.
 func DatastoreGetBandwidth() int {
-	pid := CurrentSpecReport().LineNumber()
-	datastorePrologue(pid)
-	return datastoreBandwidth[pid]
+	bandwidth := getDatastoreBandwidthShard()
+	return *bandwidth
 }
 
 // Use this in testing to reset the keystore to empty
 func keystoreClear() {
-	pid := CurrentSpecReport().LineNumber()
-	keystorePrologue(pid)
-
-	for k := range keystore[pid] {
-		delete(keystore[pid], k)
+	keystoreShard := getKeystoreShard()
+	for k := range keystoreShard {
+		delete(keystoreShard, k)
 	}
 }
 
@@ -184,15 +190,13 @@ var KeystoreClear = keystoreClear
 
 // Sets the value in the keystore
 func keystoreSet(key string, value PublicKeyType) error {
-	pid := CurrentSpecReport().LineNumber()
-	keystorePrologue(pid)
-
-	_, present := keystore[pid][key]
+	keystoreShard := getKeystoreShard()
+	_, present := keystoreShard[key]
 	if present {
 		return errors.New("entry in keystore has been taken")
 	}
 
-	keystore[pid][key] = value
+	keystoreShard[key] = value
 	return nil
 }
 
@@ -200,9 +204,8 @@ var KeystoreSet = keystoreSet
 
 // Returns the value if it exists
 func keystoreGet(key string) (value PublicKeyType, ok bool) {
-	pid := CurrentSpecReport().LineNumber()
-	keystorePrologue(pid)
-	value, ok = keystore[pid][key]
+	keystoreShard := getKeystoreShard()
+	value, ok = keystoreShard[key]
 	return
 }
 
@@ -211,17 +214,15 @@ var KeystoreGet = keystoreGet
 // Use this in testing to get the underlying map if you want
 // to play with the datastore.
 func DatastoreGetMap() map[UUID][]byte {
-	pid := CurrentSpecReport().LineNumber()
-	datastorePrologue(pid)
-	return datastore[pid]
+	datastoreShard := getDatastoreShard()
+	return datastoreShard
 }
 
 // Use this in testing to get the underlying map if you want
 // to play with the keystore.
 func KeystoreGetMap() map[string]PublicKeyType {
-	pid := CurrentSpecReport().LineNumber()
-	keystorePrologue(pid)
-	return keystore[pid]
+	keystoreShard := getKeystoreShard()
+	return keystoreShard
 }
 
 /*
