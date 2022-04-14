@@ -174,9 +174,9 @@ var _ = Describe("Client Tests", func() {
 		Describe("KeystoreGetMap()", func() {
 			It("should return the underlying map", func() {
 				pid := CurrentSpecReport().LineNumber()
-				keystorePrologue(pid)
 				actualPtr := reflect.ValueOf(KeystoreGetMap()).Pointer()
-				expectedPtr := reflect.ValueOf(keystore[pid]).Pointer()
+				keystoreShard, _ := keystore.Load(pid)
+				expectedPtr := reflect.ValueOf(keystoreShard).Pointer()
 				Expect(actualPtr).To(Equal(expectedPtr),
 					"The map returned was not the underlying keystore map.")
 			})
