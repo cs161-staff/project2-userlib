@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"crypto"
@@ -14,8 +15,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha512"
-
-	"sync"
 
 	"golang.org/x/crypto/sha3"
 
