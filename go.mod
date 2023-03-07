@@ -10,5 +10,5 @@ require (
 
 require (
 	github.com/onsi/ginkgo/v2 v2.1.3 // indirect
-	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
+	golang.org/x/crypto v0.1.0
 )
