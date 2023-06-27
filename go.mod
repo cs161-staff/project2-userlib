@@ -1,6 +1,6 @@
 module github.com/cs161-staff/project2-userlib
 
-go 1.14
+go 1.20
 
 require (
 	github.com/google/uuid v1.3.0
