@@ -16,7 +16,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha512"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
